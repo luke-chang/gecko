@@ -260,6 +260,11 @@ class Toolbar {
       'firstPage', 'lastPage', 'pageRotateCw', 'pageRotateCcw'
     ];
 
+    let disabled = [
+      'openFile', 'secondaryOpenFile', 'print', 'secondaryPrint',
+      'toggleHandTool', 'documentProperties'
+    ];
+
     this.ZOOM_FACTORS = [
       0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.3, 1.5, 1.7, 1.9, 2.1,
       2.4, 2.7, 3, 3.3, 3.7, 4.1, 4.6, 5.1, 5.7, 6.3, 7, 7.7, 8.5, 9.4, 10
@@ -270,6 +275,13 @@ class Toolbar {
     this._loadingBar = new ProgressBar();
     this._scaleSelect = new ScaleSelect(viewport);
     this._outlineView = new OutlineView(viewport);
+
+    // Disabled Functions
+    disabled.forEach(id => document.getElementById(id).classList.add('hidden'));
+    document.getElementById('toggleHandTool')
+      .previousSibling.previousSibling.classList.add('hidden');
+    document.getElementById('documentProperties')
+      .previousSibling.previousSibling.classList.add('hidden');
 
     this._elements = {};
     elements.forEach(id => {
