@@ -40,28 +40,192 @@ class ProgressBar {
   }
 }
 
-class SecondaryToolbar {
-  constructor() {
-    this._container = document.getElementById('secondaryToolbar');
-    this._toggleButton = document.getElementById('secondaryToolbarToggle');
+class DoorHanger {
+  constructor(containerId, toogleButtonId) {
+    this._container = document.getElementById(containerId);
+    this._toggleButton = document.getElementById(toogleButtonId);
+    this._visible = false;
   }
 
-  toggle() {
-    this._toggleButton.classList.toggle('toggled');
-    this._container.classList.toggle('hidden');
-    if (this._container.classList.contains('hidden')) {
-      window.removeEventListener('click', this);
-    } else {
+  get visible() {
+    return this._visible;
+  }
+
+  toggle(visible) {
+    if (visible === undefined) {
+      visible = !this._visible;
+    } else if (visible === this._visible) {
+      return;
+    }
+    this._visible = visible;
+    this._toggleButton.classList.toggle('toggled', visible);
+    this._container.classList.toggle('hidden', !visible);
+  }
+}
+
+class SecondaryToolbar extends DoorHanger {
+  constructor() {
+    super('secondaryToolbar', 'secondaryToolbarToggle');
+  }
+
+  toggle(visible) {
+    super.toggle(visible);
+
+    if (this.visible) {
       window.addEventListener('click', this);
+    } else {
+      window.removeEventListener('click', this);
     }
   }
 
   handleEvent(evt) {
-    // Hide the secondary toolbar automatically when a user is not clicking the
-    // toggle button. (The handler of the toggle button will take care of hiding
-    // it instead.)
+    // Hide automatically when a user is not clicking the toggle button. (The
+    // handler of the toggle button should take care of hiding it if needed.)
     if (evt.target != this._toggleButton) {
       this.toggle();
+    }
+  }
+}
+
+class Findbar extends DoorHanger {
+  constructor(viewport) {
+    super('findbar', 'viewFind');
+
+    let elements = ['findInput', 'findMsg', 'findResultsCount', 'findPrevious',
+                    'findNext', 'findMatchCase'];
+
+    this._elements = {};
+    elements.forEach(id => {
+      this._elements[id] = document.getElementById(id);
+    });
+
+    this._viewport = viewport;
+    this._viewport.onFindResultsCountChanged =
+      this._handleFindResultsCountChanged.bind(this);
+    this._viewport.onSelectedFindResultChanged =
+      this._handleSelectedFindResultChanged.bind(this);
+
+    this._startFindTimer = null;
+
+    this._findDirection = 0;
+    this._previousSelectedIndex = -1;
+
+    this._elements.findInput.addEventListener('input', this);
+    this._elements.findPrevious.addEventListener('click', this);
+    this._elements.findNext.addEventListener('click', this);
+    this._elements.findMatchCase.addEventListener('click', this);
+  }
+
+  _startFind() {
+    if (this._startFindTimer) {
+      clearTimeout(this._startFindTimer);
+    }
+
+    let text = this._elements.findInput.value;
+    if (text == '') {
+      this._viewport.stopFind();
+      this._updateStatus(0, true);
+      return;
+    }
+
+    this._findDirection = 0;
+    this._previousSelectedIndex = -1;
+
+    this._startFindTimer = setTimeout(() => {
+      this._startFindTimer = null;
+      this._updateStatus(0);
+      this._viewport.startFind(text, this._elements.findMatchCase.checked);
+    }, 300);
+  }
+
+  _handleFindResultsCountChanged(total, finalResult) {
+    this._updateStatus(total, finalResult);
+  }
+
+  _handleSelectedFindResultChanged(index) {
+    if (this._findDirection > 0 && index < this._previousSelectedIndex) {
+      this._updateMessage('find_reached_bottom');
+    } else if(this._findDirection < 0 && index > this._previousSelectedIndex) {
+      this._updateMessage('find_reached_top');
+    } else {
+      this._updateMessage('');
+    }
+    this._previousSelectedIndex = index;
+  }
+
+  _updateStatus(findResultsCount, final) {
+    let notFound = false;
+    let messageL10n = '';
+    let status = '';
+
+    if (!final) {
+      status = 'pending';
+    } else if (this._elements.findInput.value !== '' && !findResultsCount) {
+      messageL10n = 'find_not_found';
+      notFound = true;
+    }
+
+    this._elements.findInput.classList.toggle('notFound', notFound);
+    this._elements.findInput.dataset.status = status;
+
+    this._updateMessage(messageL10n);
+
+    if (!findResultsCount) {
+      this._elements.findResultsCount.classList.add('hidden');
+    } else {
+      this._elements.findResultsCount.classList.remove('hidden');
+      this._elements.findResultsCount.textContent =
+        findResultsCount.toLocaleString();
+    }
+  }
+
+  _updateMessage(id) {
+    if (id) {
+      document.l10n.formatValue(id)
+        .then(result => this._elements.findMsg.textContent = result);
+    } else {
+      this._elements.findMsg.textContent = '';
+    }
+  }
+
+  toggle(visible) {
+    super.toggle(visible);
+
+    if (this.visible) {
+      this._elements.findInput.select();
+      this._elements.findInput.focus();
+    }
+  }
+
+  findPrevious() {
+    this._findDirection = -1;
+    this._viewport.selectFindResult(false);
+  }
+
+  findNext() {
+    this._findDirection = 1;
+    this._viewport.selectFindResult(true);
+  }
+
+  handleEvent(evt) {
+    switch(evt.type) {
+      case 'input':
+        this._startFind();
+        break;
+      case 'click':
+        switch(evt.target.id) {
+          case 'findPrevious':
+            this.findPrevious();
+            break;
+          case 'findNext':
+            this.findNext();
+            break;
+          case 'findMatchCase':
+            this._viewport.stopFind();
+            this._startFind();
+            break;
+        }
+        break;
     }
   }
 }
@@ -272,6 +436,7 @@ class Toolbar {
 
     this._viewport = viewport;
     this._secondaryToolbar = new SecondaryToolbar();
+    this._findbar = new Findbar(viewport);
     this._loadingBar = new ProgressBar();
     this._scaleSelect = new ScaleSelect(viewport);
     this._outlineView = new OutlineView(viewport);
@@ -331,6 +496,9 @@ class Toolbar {
     switch(id) {
       case 'viewOutline':
         this._outlineView.toggle();
+        break;
+      case 'viewFind':
+        this._findbar.toggle();
         break;
       case 'firstPage':
         this._viewport.page = 0;

@@ -38,6 +38,8 @@ class Viewport {
     this.onPageChanged = null;
     this.onBookmarksLoaded = null;
     this.onFullscreenChange = null;
+    this.onFindResultsCountChanged = null;
+    this.onSelectedFindResultChanged = null;
 
     this._viewportController.addEventListener('scroll', this);
     window.addEventListener('resize', this);
@@ -394,6 +396,8 @@ class Viewport {
   }
 
   _handleFullscreenChange(fullscreen) {
+    this.stopFind();
+
     // Set status to "changing" again in case it isn't triggered by setter.
     this._fullscreenStatus = 'changing';
     this._viewerContainer.classList.toggle('pdfPresentationMode', fullscreen);
@@ -517,6 +521,27 @@ class Viewport {
     });
   }
 
+  startFind(term, caseSensitive) {
+    this._doAction({
+      type: 'startFind',
+      term,
+      caseSensitive
+    });
+  }
+
+  selectFindResult(forward) {
+    this._doAction({
+      type: 'selectFindResult',
+      forward
+    });
+  }
+
+  stopFind() {
+    this._doAction({
+      type: 'stopFind'
+    });
+  }
+
   // A handler for delivering messages to runtime.
   registerActionHandler(handler) {
     if (typeof handler === 'function') {
@@ -598,6 +623,7 @@ class Viewport {
         break;
       case 'fullscreenChange':
         this._handleFullscreenChange(message.fullscreen);
+        break;
       case 'metadata':
         if (typeof this.onBookmarksLoaded === 'function') {
           this.onBookmarksLoaded(message.bookmarks);
@@ -605,6 +631,29 @@ class Viewport {
         break;
       case 'goToPage':
         this.page = message.page;
+        break;
+      case 'setScrollPosition':
+        let position = this.getScrollOffset();
+        if (message.x !== undefined) {
+          position.x = message.x;
+        }
+        if (message.y !== undefined) {
+          position.y = message.y;
+        }
+        this._setPosition(position.x, position.y);
+        this._refresh();
+        break;
+      case 'selectedFindResultChanged':
+        if (typeof this.onSelectedFindResultChanged === 'function') {
+          this.onSelectedFindResultChanged(message.index);
+        }
+        break;
+      case 'numberOfFindResultsChanged':
+        if (typeof this.onFindResultsCountChanged === 'function') {
+          this.onFindResultsCountChanged(message.total, message.finalResult);
+        }
+        break;
+      case 'setTickmarks':
         break;
     }
   }

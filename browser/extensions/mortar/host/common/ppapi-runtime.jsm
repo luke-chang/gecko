@@ -1671,6 +1671,15 @@ class PPAPIInstance {
       case 'save':
         this.mm.sendAsyncMessage("ppapipdf.js:save");
         break;
+      case 'startFind':
+        this.startFind(message.term, message.caseSensitive);
+        break;
+      case 'selectFindResult':
+        this.selectFindResult(message.forward);
+        break;
+      case 'stopFind':
+        this.stopFind();
+        break;
       case 'viewport':
       case 'rotateClockwise':
       case 'rotateCounterclockwise':
