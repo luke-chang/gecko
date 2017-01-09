@@ -25,6 +25,7 @@ function log() {
 window.addEventListener('DOMContentLoaded', function() {
   let viewport = new Viewport();
   let toolbar = new Toolbar(viewport);
+  let keyHandler = new KeyHandler(viewport, toolbar);
   let presentationController = new PresentationController(viewport);
 
   // Expose the custom viewport object to runtime

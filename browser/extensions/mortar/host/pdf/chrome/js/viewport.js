@@ -12,6 +12,7 @@ class Viewport {
     this._viewportController = document.getElementById('viewportController');
     this._sizer = document.getElementById('sizer');
 
+    this._formFocused = false;
     this._fullscreenStatus = 'none';
     this._scrollbarWidth = this._getScrollbarWidth();
 
@@ -43,6 +44,14 @@ class Viewport {
 
     this._viewportController.addEventListener('scroll', this);
     window.addEventListener('resize', this);
+  }
+
+  get isHorizontalOverflow() {
+    if (this.fullscreen) {
+      return false;
+    }
+    let viewportController = this._viewportController;
+    return viewportController.scrollWidth > viewportController.clientWidth;
   }
 
   get zoom() {
@@ -124,6 +133,10 @@ class Viewport {
       type: 'setFullscreen',
       fullscreen: enable
     });
+  }
+
+  get hasFormFocused() {
+    return this._formFocused;
   }
 
   _getScrollbarWidth() {
@@ -503,6 +516,10 @@ class Viewport {
     this._refresh();
   }
 
+  focus() {
+    this._viewportController.focus();
+  }
+
   rotateClockwise() {
     this._doAction({
       type: 'rotateClockwise'
@@ -518,6 +535,12 @@ class Viewport {
   save() {
     this._doAction({
       type: 'save'
+    });
+  }
+
+  selectAll() {
+    this._doAction({
+      type: 'selectAll'
     });
   }
 
@@ -631,6 +654,9 @@ class Viewport {
         break;
       case 'goToPage':
         this.page = message.page;
+        break;
+      case 'formFocusChange':
+        this._formFocused = message.focused;
         break;
       case 'setScrollPosition':
         let position = this.getScrollOffset();

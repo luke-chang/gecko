@@ -470,26 +470,6 @@ class Toolbar {
     this._updateToolbar();
   }
 
-  _zoomIn() {
-    let zoom = this._viewport.zoom;
-    let newZoom = this.ZOOM_FACTORS.find(factor => (factor - zoom) > 0.049);
-    if (!newZoom) {
-      newZoom = this.ZOOM_FACTORS[this.ZOOM_FACTORS.length - 1];
-    }
-    this._viewport.zoom = newZoom;
-  }
-
-  _zoomOut() {
-    let reversedFactors = Array.from(this.ZOOM_FACTORS);
-    reversedFactors.reverse();
-    let zoom = this._viewport.zoom;
-    let newZoom = reversedFactors.find(factor => (zoom - factor) > 0.049);
-    if (!newZoom) {
-      newZoom = this.ZOOM_FACTORS[0];
-    }
-    this._viewport.zoom = newZoom;
-  }
-
   _buttonClicked(id) {
     log(id);
 
@@ -513,10 +493,10 @@ class Toolbar {
         this._viewport.page++;
         break;
       case 'zoomIn':
-        this._zoomIn();
+        this.zoomIn();
         break;
       case 'zoomOut':
-        this._zoomOut();
+        this.zoomOut();
         break;
       case 'download':
       case 'secondaryDownload':
@@ -587,6 +567,42 @@ class Toolbar {
     if (progress == 100) {
       this._loadingBar.hide(true);
     }
+  }
+
+  hideDoorHangers() {
+    let hadDoorHangerShown =
+      this._secondaryToolbar.visible || this._findbar.visible;
+    this._secondaryToolbar.toggle(false);
+    this._findbar.toggle(false);
+    return hadDoorHangerShown;
+  }
+
+  showFindbar() {
+    this._findbar.toggle(true);
+  }
+
+  findNext() {
+    this._findbar.findNext();
+  }
+
+  zoomIn() {
+    let zoom = this._viewport.zoom;
+    let newZoom = this.ZOOM_FACTORS.find(factor => (factor - zoom) > 0.049);
+    if (!newZoom) {
+      newZoom = this.ZOOM_FACTORS[this.ZOOM_FACTORS.length - 1];
+    }
+    this._viewport.zoom = newZoom;
+  }
+
+  zoomOut() {
+    let reversedFactors = Array.from(this.ZOOM_FACTORS);
+    reversedFactors.reverse();
+    let zoom = this._viewport.zoom;
+    let newZoom = reversedFactors.find(factor => (zoom - factor) > 0.049);
+    if (!newZoom) {
+      newZoom = this.ZOOM_FACTORS[0];
+    }
+    this._viewport.zoom = newZoom;
   }
 
   handleEvent(evt) {
