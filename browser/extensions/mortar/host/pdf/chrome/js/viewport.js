@@ -587,6 +587,8 @@ class Viewport {
 
   // Notified by runtime.
   notify(message) {
+    log(message);
+
     switch (message.type) {
       case 'loadProgress':
         this._updateProgress(message.progress);

@@ -314,6 +314,8 @@ class Toolbar {
   }
 
   _buttonClicked(id) {
+    log(id);
+
     switch(id) {
       case 'viewOutline':
         this._outlineView.toggle();
