@@ -4,6 +4,24 @@
 
 'use strict';
 
+function log() {
+  let args = Array.from(arguments).map(arg => {
+    switch(typeof arg) {
+      case 'object':
+        if (arg instanceof HTMLElement) {
+          return `[HTMLElement] ${arg.outerHTML}`;
+        } else {
+          return JSON.stringify(arg);
+        }
+      case 'function':
+        return `[${typeof arg}]`;
+      default:
+        return arg;
+    }
+  });
+  dump('luke: ' + args.join(', ') + '\n');
+}
+
 window.addEventListener('DOMContentLoaded', function() {
   let viewport = new Viewport();
   let toolbar = new Toolbar(viewport);
