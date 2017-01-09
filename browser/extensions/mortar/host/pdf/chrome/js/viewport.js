@@ -37,6 +37,7 @@ class Viewport {
     this.onDimensionChanged = null;
     this.onPageChanged = null;
     this.onBookmarksLoaded = null;
+    this.onFullscreenChange = null;
 
     this._viewportController.addEventListener('scroll', this);
     window.addEventListener('resize', this);
@@ -415,6 +416,10 @@ class Viewport {
         this._zoom = this._previousZoom;
         this._fitting = this._previousFitting;
         this._setZoom(this._computeFittingZoom());
+      }
+
+      if (typeof this.onFullscreenChange === 'function') {
+        this.onFullscreenChange(fullscreen);
       }
 
       this._fullscreenStatus = fullscreen ? 'fullscreen' : 'none';
