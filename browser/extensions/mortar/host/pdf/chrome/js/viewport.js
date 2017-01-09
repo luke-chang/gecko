@@ -36,6 +36,7 @@ class Viewport {
     this.onZoomChanged = null;
     this.onDimensionChanged = null;
     this.onPageChanged = null;
+    this.onBookmarksLoaded = null;
 
     this._viewportController.addEventListener('scroll', this);
     window.addEventListener('resize', this);
@@ -590,6 +591,13 @@ class Viewport {
         break;
       case 'fullscreenChange':
         this._handleFullscreenChange(message.fullscreen);
+      case 'metadata':
+        if (typeof this.onBookmarksLoaded === 'function') {
+          this.onBookmarksLoaded(message.bookmarks);
+        }
+        break;
+      case 'goToPage':
+        this.page = message.page;
         break;
     }
   }

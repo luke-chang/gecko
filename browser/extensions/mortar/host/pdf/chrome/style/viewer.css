@@ -250,6 +250,11 @@ html[dir='rtl'] #toolbarSidebar {
               0 0 1px hsla(0,0%,0%,.1);
 }
 
+#toolbarSidebar .toolbarLabel {
+  margin-left: 4px;
+  display: inline-block;
+}
+
 #toolbarContainer, .findbar, .secondaryToolbar {
   position: relative;
   height: var(--toolbar-height);

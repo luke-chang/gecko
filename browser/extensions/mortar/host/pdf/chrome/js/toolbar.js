@@ -115,6 +115,144 @@ class ScaleSelect {
   }
 }
 
+class Sidebar {
+  constructor(viewport, toggleButtonId) {
+    this._sidebarContainer = document.getElementById('sidebarContainer');
+    this._outerContainer = document.getElementById('outerContainer');
+    this._toggleButton = document.getElementById(toggleButtonId);
+
+    this._viewport = viewport;
+    this._isMoving = false;
+  }
+
+  _triggerViewportResize() {
+    this._viewport.invokeResize();
+    if (this._isMoving) {
+      window.requestAnimationFrame(this._triggerViewportResize.bind(this));
+    }
+  }
+
+  toggle() {
+    if (this._isMoving) {
+      return;
+    }
+    this._isMoving = true;
+    this._toggleButton.classList.toggle('toggled');
+    this._outerContainer.classList.toggle('sidebarOpen');
+    this._outerContainer.classList.add('sidebarMoving');
+
+    let onTransitionEnd = evt => {
+      if (evt.target === this._sidebarContainer) {
+        this._isMoving = false;
+        this._outerContainer.classList.remove('sidebarMoving');
+        this._sidebarContainer.removeEventListener('transitionend', onTransitionEnd);
+      }
+    };
+    this._sidebarContainer.addEventListener('transitionend', onTransitionEnd);
+
+    window.requestAnimationFrame(this._triggerViewportResize.bind(this));
+  }
+}
+
+class OutlineView extends Sidebar {
+  constructor(viewport) {
+    super(viewport, 'viewOutline');
+
+    this._toggleButton.disabled = true;
+
+    this._header = document.getElementById('outlineLabel');
+    this._container = document.getElementById('outlineView');
+
+    this._header.addEventListener('dblclick', this);
+    this._viewport.onBookmarksLoaded = this._render.bind(this);
+  }
+
+  _toggleAllSubItems(root, show) {
+    this._lastToggleIsShow = show;
+    for (let toggler of root.querySelectorAll('.outlineItemToggler')) {
+      toggler.classList.toggle('outlineItemsHidden', !show);
+    }
+  }
+
+  _render(bookmarks) {
+    let fragment = document.createDocumentFragment();
+    let queue = [{ parent: fragment, bookmarks }];
+    let hasAnyNesting = false;
+    let hasBookmarks = false;
+
+    while (queue.length > 0) {
+      let levelData = queue.shift();
+
+      for (let bookmark of levelData.bookmarks) {
+        let div = document.createElement('div');
+        div.className = 'outlineItem';
+
+        // Add link
+        let element = document.createElement('a');
+        if (Number.isInteger(bookmark.page)) {
+          element.href = '#';
+          element.dataset.page = bookmark.page;
+        } else if (bookmark.hasOwnProperty('uri')) {
+          // TODO
+        }
+        element.addEventListener('click', this);
+        element.textContent = bookmark.title;
+        div.appendChild(element);
+
+        hasBookmarks = true;
+
+        if (bookmark.children.length > 0) {
+          hasAnyNesting = true;
+
+          // Add toogle button
+          let toggler = document.createElement('div');
+          toggler.className = 'outlineItemToggler';
+          toggler.addEventListener('click', this);
+          div.insertBefore(toggler, div.firstChild);
+
+          // Add children's container
+          let childrenDiv = document.createElement('div');
+          childrenDiv.className = 'outlineItems';
+          div.appendChild(childrenDiv);
+
+          queue.push({ parent: childrenDiv, bookmarks: bookmark.children });
+        }
+
+        levelData.parent.appendChild(div);
+      }
+    }
+
+    this._container.classList.toggle('outlineWithDeepNesting', hasAnyNesting);
+    this._container.innerHTML = '';
+    this._container.appendChild(fragment);
+
+    this._toggleButton.disabled = !hasBookmarks;
+    this._lastToggleIsShow = true;
+  }
+
+  handleEvent(evt) {
+    let target = evt.target;
+
+    evt.stopPropagation();
+    evt.preventDefault();
+
+    if (target.id == 'outlineLabel') {
+      this._toggleAllSubItems(this._container, !this._lastToggleIsShow);
+    } else if (target.classList.contains('outlineItemToggler')) {
+      target.classList.toggle('outlineItemsHidden');
+      if (evt.shiftKey) {
+        let shouldShowAll = !target.classList.contains('outlineItemsHidden');
+        this._toggleAllSubItems(target.parentNode, shouldShowAll);
+      }
+    } else {
+      let page = evt.target.dataset.page;
+      if (page !== undefined) {
+        this._viewport.page = page;
+      }
+    }
+  }
+}
+
 class Toolbar {
   constructor(viewport) {
     let elements = [
@@ -131,6 +269,7 @@ class Toolbar {
     this._secondaryToolbar = new SecondaryToolbar();
     this._loadingBar = new ProgressBar();
     this._scaleSelect = new ScaleSelect(viewport);
+    this._outlineView = new OutlineView(viewport);
 
     this._elements = {};
     elements.forEach(id => {
@@ -176,6 +315,9 @@ class Toolbar {
 
   _buttonClicked(id) {
     switch(id) {
+      case 'viewOutline':
+        this._outlineView.toggle();
+        break;
       case 'firstPage':
         this._viewport.page = 0;
         break;
