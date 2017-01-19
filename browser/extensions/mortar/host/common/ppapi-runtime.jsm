@@ -969,7 +969,13 @@ class Graphics2D extends Graphics {
   }
 
   flush(callback) {
+    let RGBABuffers = [];
     for (let operation of this.operations) {
+      if (operation.imageData && (RGBABuffers.indexOf(operation.imageData.mapped) == -1)) {
+        let dataArray = new Uint8ClampedArray(this.instance.rt.getCachedBuffer(operation.imageData.mapped));
+        operation.imageData._colorConvert(dataArray);
+        RGBABuffers.push(operation.imageData.mapped);
+      }
       operation.execute(this.context);
       operation.destroy();
     }
@@ -1117,7 +1123,6 @@ class ImageData extends PP_Resource {
   }
   getDOMImageData() {
     let dataArray = new Uint8ClampedArray(this.instance.rt.getCachedBuffer(this.mapped));
-    this._colorConvert(dataArray);
     let imagedata = new this.instance.window.ImageData(dataArray, this.size.width, this.size.height);
     return imagedata;
   }
@@ -1566,6 +1571,10 @@ class PPAPIInstance {
       return;
     }
     if (event.type == "keypress" && event.charCode === 0) {
+      return;
+    }
+
+    if ((event.type == "keydown" || event.type == "keyup") && event.keyCode === 8 ) {
       return;
     }
 

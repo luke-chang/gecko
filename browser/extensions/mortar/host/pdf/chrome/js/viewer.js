@@ -5,6 +5,8 @@
 'use strict';
 
 function log() {
+  return;
+
   let args = Array.from(arguments).map(arg => {
     switch(typeof arg) {
       case 'object':

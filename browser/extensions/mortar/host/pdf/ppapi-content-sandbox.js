@@ -24,6 +24,13 @@ let containerWindow = pluginElement.ownerDocument.defaultView;
 // that element while the user selects text.
 pluginElement.addEventListener("dragstart",
                                function(event) { event.preventDefault(); });
+
+pluginElement.addEventListener("keypress", function(event) {
+  if (event.keyCode === 8) {
+    event.preventDefault();
+  }
+});
+
 // For synthetic documents only, prevent the select event's default action on
 // the element, to avoid selecting the element and the copying of an empty
 // string into the clipboard. Don't do this for non-synthetic documents, as
