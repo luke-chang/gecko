@@ -13,6 +13,11 @@ const ADDRESS_REFERENCES = "chrome://formautofill/content/addressReferences.js";
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
 this.FormAutofillUtils = {
+  // Add these enabled flags in telemetry environment for recording the number of
+  // users who disable/enable the address autofill feature.
+  PREF_ADDRESSES_ENABLED: "extensions.formautofill.addresses.enabled",
+  PREF_CREDIT_CARDS_ENABLED: "extensions.formautofill.creditCards.enabled",
+
   get AUTOFILL_FIELDS_THRESHOLD() { return 3; },
 
   _fieldNameInfo: {
@@ -304,6 +309,20 @@ this.FormAutofillUtils = {
     return !collator.compare(a, b);
   },
 };
+
+XPCOMUtils.defineLazyPreferenceGetter(
+  this.FormAutofillUtils,
+  "prefAddressesEnabled",
+  this.FormAutofillUtils.PREF_ADDRESSES_ENABLED,
+  false,
+);
+
+XPCOMUtils.defineLazyPreferenceGetter(
+  this.FormAutofillUtils,
+  "prefCreditCardsEnabled",
+  this.FormAutofillUtils.PREF_CREDIT_CARDS_ENABLED,
+  false,
+);
 
 this.log = null;
 this.FormAutofillUtils.defineLazyLogGetter(this, this.EXPORTED_SYMBOLS[0]);

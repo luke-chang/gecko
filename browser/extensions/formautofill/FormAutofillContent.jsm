@@ -318,8 +318,7 @@ var FormAutofillContent = {
         // If storage hasn't be initialized yet autofillEnabled is undefined but we need to ensure
         // autocomplete is registered before the focusin so register it in this case as long as the
         // pref is true.
-        (autofillEnabled === undefined &&
-         Services.prefs.getBoolPref("extensions.formautofill.addresses.enabled"))) {
+        (autofillEnabled === undefined && FormAutofillUtils.prefAddressesEnabled)) {
       ProfileAutocomplete.ensureRegistered();
     }
 

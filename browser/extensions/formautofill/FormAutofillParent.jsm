@@ -48,8 +48,6 @@ XPCOMUtils.defineLazyModuleGetter(this, "RecentWindow",
 this.log = null;
 FormAutofillUtils.defineLazyLogGetter(this, this.EXPORTED_SYMBOLS[0]);
 
-const ENABLED_PREF = "extensions.formautofill.addresses.enabled";
-
 function FormAutofillParent() {
   // Lazily load the storage JSM to avoid disk I/O until absolutely needed.
   // Once storage is loaded we need to update saved field names and inform content processes.
@@ -64,6 +62,15 @@ function FormAutofillParent() {
 
     return profileStorage;
   });
+
+  XPCOMUtils.defineLazyPreferenceGetter(
+    this,
+    "prefAddressesEnabled",
+    FormAutofillUtils.PREF_ADDRESSES_ENABLED,
+    false,
+    // Observe pref changes and update _active cache if status is changed.
+    () => this._updateStatus(),
+  );
 }
 
 FormAutofillParent.prototype = {
@@ -86,8 +93,7 @@ FormAutofillParent.prototype = {
     Services.ppmm.addMessageListener("FormAutofill:OpenPreferences", this);
     Services.mm.addMessageListener("FormAutofill:OnFormSubmit", this);
 
-    // Observing the pref and storage changes
-    Services.prefs.addObserver(ENABLED_PREF, this);
+    // Observing the storage changes
     Services.obs.addObserver(this, "formautofill-storage-changed");
   },
 
@@ -107,12 +113,6 @@ FormAutofillParent.prototype = {
                                document.getElementById("locationBarGroup") :
                                document.getElementById("masterPasswordRow");
         parentNode.insertBefore(prefGroup, insertBeforeNode);
-        break;
-      }
-
-      case "nsPref:changed": {
-        // Observe pref changes and update _active cache if status is changed.
-        this._updateStatus();
         break;
       }
 
@@ -150,7 +150,7 @@ FormAutofillParent.prototype = {
    * @returns {boolean} whether form autofill is active (enabled and has data)
    */
   _computeStatus() {
-    if (!Services.prefs.getBoolPref(ENABLED_PREF)) {
+    if (!this.prefAddressesEnabled) {
       return false;
     }
 
@@ -220,8 +220,11 @@ FormAutofillParent.prototype = {
     Services.ppmm.removeMessageListener("FormAutofill:GetAddresses", this);
     Services.ppmm.removeMessageListener("FormAutofill:SaveAddress", this);
     Services.ppmm.removeMessageListener("FormAutofill:RemoveAddresses", this);
+    Services.ppmm.removeMessageListener("FormAutofill:OpenPreferences", this);
+    Services.mm.removeMessageListener("FormAutofill:OnFormSubmit", this);
+
     Services.obs.removeObserver(this, "advanced-pane-loaded");
-    Services.prefs.removeObserver(ENABLED_PREF, this);
+    Services.obs.removeObserver(this, "formautofill-storage-changed");
   },
 
   /**

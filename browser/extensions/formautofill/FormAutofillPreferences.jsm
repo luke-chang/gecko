@@ -11,9 +11,7 @@
 this.EXPORTED_SYMBOLS = ["FormAutofillPreferences"];
 
 const {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
-// Add addresses enabled flag in telemetry environment for recording the number of
-// users who disable/enable the address autofill feature.
-const PREF_AUTOFILL_ENABLED = "extensions.formautofill.addresses.enabled";
+
 const BUNDLE_URI = "chrome://formautofill/locale/formautofill.properties";
 const MANAGE_PROFILES_URL = "chrome://formautofill/content/manageProfiles.xhtml";
 const XUL_NS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
@@ -31,15 +29,6 @@ function FormAutofillPreferences({useOldOrganization}) {
 }
 
 FormAutofillPreferences.prototype = {
-  /**
-   * Check if Form Autofill feature is enabled.
-   *
-   * @returns {boolean}
-   */
-  get isAutofillEnabled() {
-    return Services.prefs.getBoolPref(PREF_AUTOFILL_ENABLED);
-  },
-
   /**
    * Create the Form Autofill preference group.
    *
@@ -101,7 +90,7 @@ FormAutofillPreferences.prototype = {
     profileAutofillCheckbox.setAttribute("label", this.bundle.GetStringFromName("enableProfileAutofill"));
 
     // Manually set the checked state
-    if (this.isAutofillEnabled) {
+    if (FormAutofillUtils.prefAddressesEnabled) {
       profileAutofillCheckbox.setAttribute("checked", true);
     }
 
@@ -125,7 +114,7 @@ FormAutofillPreferences.prototype = {
 
         if (target == this.refs.profileAutofillCheckbox) {
           // Set preference directly instead of relying on <Preference>
-          Services.prefs.setBoolPref(PREF_AUTOFILL_ENABLED, target.checked);
+          Services.prefs.setBoolPref(FormAutofillUtils.PREF_ADDRESSES_ENABLED, target.checked);
         } else if (target == this.refs.savedProfilesBtn) {
           target.ownerGlobal.gSubDialog.open(MANAGE_PROFILES_URL);
         }

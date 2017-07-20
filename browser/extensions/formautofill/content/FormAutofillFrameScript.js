@@ -35,7 +35,7 @@ var FormAutofillFrameScript = {
       return;
     }
 
-    if (!Services.prefs.getBoolPref("extensions.formautofill.addresses.enabled")) {
+    if (!FormAutofillUtils.prefAddressesEnabled) {
       return;
     }
 
@@ -62,7 +62,7 @@ var FormAutofillFrameScript = {
   },
 
   receiveMessage(message) {
-    if (!Services.prefs.getBoolPref("extensions.formautofill.addresses.enabled")) {
+    if (!FormAutofillUtils.prefAddressesEnabled) {
       return;
     }
 
