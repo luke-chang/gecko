@@ -13,9 +13,12 @@
 const {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
 
 Cu.import("resource://gre/modules/Services.jsm");
-Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://formautofill/FormAutofillContent.jsm");
-Cu.import("resource://formautofill/FormAutofillUtils.jsm");
+
+const PREF_ADDRESSES_ENABLED = "extensions.formautofill.addresses.enabled";
+
+// This list should align with the same one in FormAutofillHandler.jsm.
+const ALLOWED_TYPES = ["text", "email", "tel", "number"];
 
 /**
  * Handles content's interactions for the frame.
@@ -23,6 +26,50 @@ Cu.import("resource://formautofill/FormAutofillUtils.jsm");
  * NOTE: Declares it by "var" to make it accessible in unit tests.
  */
 var FormAutofillFrameScript = {
+  _nextHandleElement: null,
+  _alreadyDCL: false,
+  _hasDCLhandler: false,
+  _hasPendingTask: false,
+
+  get _prefEnabled() {
+    if (this.__prefEnabled === undefined) {
+      this.__prefEnabled = Services.prefs.getBoolPref(PREF_ADDRESSES_ENABLED);
+    }
+    return this.__prefEnabled;
+  },
+
+  _isFieldEligibleForAutofill(element) {
+    let autocomplete = element.autocomplete;
+
+    if (autocomplete == "off") {
+      return false;
+    }
+
+    let tagName = element.tagName;
+    if (tagName == "INPUT") {
+      if (!ALLOWED_TYPES.includes(element.type)) {
+        return false;
+      }
+    } else if (tagName != "SELECT") {
+      return false;
+    }
+
+    return true;
+  },
+
+  _doIdentifyAutofillFields() {
+    if (this._hasPendingTask) {
+      return;
+    }
+    this._hasPendingTask = true;
+
+    setTimeout(() => {
+      FormAutofillContent.identifyAutofillFields(this._nextHandleElement);
+      this._hasPendingTask = false;
+      this._nextHandleElement = null;
+    });
+  },
+
   init() {
     addEventListener("focusin", this);
     addMessageListener("FormAutofill:PreviewProfile", this);
@@ -31,38 +78,33 @@ var FormAutofillFrameScript = {
   },
 
   handleEvent(evt) {
-    if (!evt.isTrusted) {
+    if (!evt.isTrusted || !this._prefEnabled) {
       return;
     }
 
-    if (!Services.prefs.getBoolPref("extensions.formautofill.addresses.enabled")) {
+    let element = evt.target;
+    if (!this._isFieldEligibleForAutofill(element)) {
       return;
     }
+    this._nextHandleElement = element;
 
-    switch (evt.type) {
-      case "focusin": {
-        let element = evt.target;
-        let doc = element.ownerDocument;
-
-        if (!FormAutofillUtils.isFieldEligibleForAutofill(element)) {
-          return;
+    if (!this._alreadyDCL) {
+      let doc = element.ownerDocument;
+      if (doc.readyState === "loading") {
+        if (!this._hasDCLhandler) {
+          this._hasDCLhandler = true;
+          doc.addEventListener("DOMContentLoaded", () => this._doIdentifyAutofillFields(), {once: true});
         }
-
-        let doIdentifyAutofillFields =
-          () => setTimeout(() => FormAutofillContent.identifyAutofillFields(element));
-
-        if (doc.readyState === "loading") {
-          doc.addEventListener("DOMContentLoaded", doIdentifyAutofillFields, {once: true});
-        } else {
-          doIdentifyAutofillFields();
-        }
-        break;
+        return;
       }
+      this._alreadyDCL = true;
     }
+
+    this._doIdentifyAutofillFields();
   },
 
   receiveMessage(message) {
-    if (!Services.prefs.getBoolPref("extensions.formautofill.addresses.enabled")) {
+    if (!this._prefEnabled) {
       return;
     }
 
@@ -87,5 +129,9 @@ var FormAutofillFrameScript = {
     }
   },
 };
+
+Services.prefs.addObserver(PREF_ADDRESSES_ENABLED, () => {
+  delete FormAutofillFrameScript.__prefEnabled;
+});
 
 FormAutofillFrameScript.init();

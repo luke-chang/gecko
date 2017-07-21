@@ -14,12 +14,11 @@ const {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
 
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
-Cu.import("resource://formautofill/FormAutofillUtils.jsm");
-
-this.log = null;
-FormAutofillUtils.defineLazyLogGetter(this, this.EXPORTED_SYMBOLS[0]);
 
 const PREF_HEURISTICS_ENABLED = "extensions.formautofill.heuristics.enabled";
+
+// This list should align with the same one in FormAutofillFrameScript.js.
+const ALLOWED_TYPES = ["text", "email", "tel", "number"];
 
 /**
  * Returns the autocomplete information of fields according to heuristics.
@@ -67,7 +66,6 @@ this.FormAutofillHeuristics = {
                                  f.contactType == info.contactType &&
                                  f.fieldName == info.fieldName)) {
         // A field with the same identifier already exists.
-        log.debug("Not collecting a field matching another with the same info:", info);
         continue;
       }
 
@@ -136,16 +134,38 @@ this.FormAutofillHeuristics = {
     return null;
   },
 
+  _isFieldEligibleForAutofill(element, autocomplete, type) {
+    if (autocomplete == "off") {
+      return false;
+    }
+
+    let tagName = element.tagName;
+    if (tagName == "INPUT") {
+      if (!ALLOWED_TYPES.includes(type)) {
+        return false;
+      }
+    } else if (tagName != "SELECT") {
+      return false;
+    }
+
+    return true;
+  },
+
   getInfo(element, fieldDetails) {
-    if (!FormAutofillUtils.isFieldEligibleForAutofill(element)) {
+    let autocomplete = element.autocomplete;
+    let type = element.type;
+
+    if (!this._isFieldEligibleForAutofill(element, autocomplete, type)) {
       return null;
     }
 
-    let info = element.getAutocompleteInfo();
     // An input[autocomplete="on"] will not be early return here since it stll
     // needs to find the field name.
-    if (info && info.fieldName && info.fieldName != "on") {
-      return info;
+    if (autocomplete != "on") {
+      let info = element.getAutocompleteInfo();
+      if (info && info.fieldName) {
+        return info;
+      }
     }
 
     if (!this._prefEnabled) {
@@ -156,7 +176,7 @@ this.FormAutofillHeuristics = {
     // field or not. However, "tel" type is used for ZIP code for some web site
     // (e.g. HomeDepot, BestBuy), so "tel" type should be not used for "tel"
     // prediction.
-    if (element.type == "email") {
+    if (type == "email") {
       return {
         fieldName: "email",
         section: "",
@@ -165,7 +185,7 @@ this.FormAutofillHeuristics = {
       };
     }
 
-    let existingFieldNames = fieldDetails ? fieldDetails.map(i => i.fieldName) : "";
+    let existingFieldNames = fieldDetails ? fieldDetails.map(i => i.fieldName) : [];
 
     for (let elementString of [element.id, element.name]) {
       let fieldNameResult = this._matchStringToFieldName(elementString,
@@ -174,13 +194,12 @@ this.FormAutofillHeuristics = {
         return fieldNameResult;
       }
     }
-    let labels = FormAutofillUtils.findLabelElements(element);
+    let labels = this.findLabelElements(element);
     if (!labels || labels.length == 0) {
-      log.debug("No label found for", element);
       return null;
     }
     for (let label of labels) {
-      let strings = FormAutofillUtils.extractLabelStrings(label);
+      let strings = this.extractLabelStrings(label);
       for (let string of strings) {
         let fieldNameResult = this._matchStringToFieldName(string,
                                                            existingFieldNames);
@@ -191,6 +210,81 @@ this.FormAutofillHeuristics = {
     }
 
     return null;
+  },
+
+  // The tag name list is from Chromium except for "STYLE":
+  // eslint-disable-next-line max-len
+  // https://cs.chromium.org/chromium/src/components/autofill/content/renderer/form_autofill_util.cc?l=216&rcl=d33a171b7c308a64dc3372fac3da2179c63b419e
+  EXCLUDED_TAGS: ["SCRIPT", "NOSCRIPT", "OPTION", "STYLE"],
+  /**
+   * Extract all strings of an element's children to an array.
+   * "element.textContent" is a string which is merged of all children nodes,
+   * and this function provides an array of the strings contains in an element.
+   *
+   * @param  {Object} element
+   *         A DOM element to be extracted.
+   * @returns {Array}
+   *          All strings in an element.
+   */
+  extractLabelStrings(element) {
+    let strings = [];
+    let _extractLabelStrings = (el) => {
+      if (this.EXCLUDED_TAGS.includes(el.tagName)) {
+        return;
+      }
+
+      if (el.nodeType == Ci.nsIDOMNode.TEXT_NODE ||
+          el.childNodes.length == 0) {
+        let trimmedText = el.textContent.trim();
+        if (trimmedText) {
+          strings.push(trimmedText);
+        }
+        return;
+      }
+
+      for (let node of el.childNodes) {
+        if (node.nodeType != Ci.nsIDOMNode.ELEMENT_NODE &&
+            node.nodeType != Ci.nsIDOMNode.TEXT_NODE) {
+          continue;
+        }
+        _extractLabelStrings(node);
+      }
+    };
+    _extractLabelStrings(element);
+    return strings;
+  },
+
+  findLabelElements(element) {
+    let document = element.ownerDocument;
+    let id = element.id;
+    let labels = [];
+    // TODO: querySelectorAll is inefficient here. However, bug 1339726 is for
+    // a more efficient implementation from DOM API perspective. This function
+    // should be refined after input.labels API landed.
+    for (let label of document.querySelectorAll("label[for]")) {
+      if (id == label.htmlFor) {
+        labels.push(label);
+      }
+    }
+
+    if (labels.length > 0) {
+      return labels;
+    }
+
+    let parent = element.parentNode;
+    if (!parent) {
+      return [];
+    }
+    do {
+      if (parent.tagName == "LABEL" &&
+          parent.control == element &&
+          !parent.hasAttribute("for")) {
+        return [parent];
+      }
+      parent = parent.parentNode;
+    } while (parent);
+
+    return [];
   },
 };
 
@@ -206,8 +300,3 @@ XPCOMUtils.defineLazyGetter(this.FormAutofillHeuristics, "RULES", () => {
 XPCOMUtils.defineLazyGetter(this.FormAutofillHeuristics, "_prefEnabled", () => {
   return Services.prefs.getBoolPref(PREF_HEURISTICS_ENABLED);
 });
-
-Services.prefs.addObserver(PREF_HEURISTICS_ENABLED, () => {
-  this.FormAutofillHeuristics._prefEnabled = Services.prefs.getBoolPref(PREF_HEURISTICS_ENABLED);
-});
-

@@ -2,6 +2,7 @@
  * Provides infrastructure for automated formautofill components tests.
  */
 
+/* global FormAutofillHeuristics */
 /* exported getTempFile, loadFormAutofillContent, runHeuristicsTest, sinon,
  *          initProfileStorage, getSyncChangeCounter, objectMatches
  */

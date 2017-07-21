@@ -1,6 +1,15 @@
 "use strict";
 
-Cu.import("resource://formautofill/FormAutofillUtils.jsm");
+Cu.import("resource://formautofill/FormAutofillHeuristics.jsm");
+
+const ScriptLoader = Cc["@mozilla.org/moz/jssubscript-loader;1"]
+                       .getService(Ci.mozIJSSubScriptLoader);
+let sandbox = {
+  addEventListener() {},
+  addMessageListener() {},
+};
+ScriptLoader.loadSubScript("chrome://formautofill/content/FormAutofillFrameScript.js", sandbox, "utf-8");
+const {FormAutofillFrameScript} = sandbox;
 
 const TESTCASES = [
   {
@@ -73,7 +82,9 @@ TESTCASES.forEach(testcase => {
       "http://localhost:8080/test/", testcase.document);
 
     let field = doc.getElementById(testcase.fieldId);
-    Assert.equal(FormAutofillUtils.isFieldEligibleForAutofill(field),
+    Assert.equal(FormAutofillFrameScript._isFieldEligibleForAutofill(field),
+                 testcase.expectedResult);
+    Assert.equal(FormAutofillHeuristics._isFieldEligibleForAutofill(field, field.autocomplete, field.type),
                  testcase.expectedResult);
   });
 });

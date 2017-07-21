@@ -12,12 +12,11 @@ this.EXPORTED_SYMBOLS = ["FormAutofillHandler"];
 
 const {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
 
-Cu.import("resource://gre/modules/XPCOMUtils.jsm");
-
 Cu.import("resource://formautofill/FormAutofillUtils.jsm");
+Cu.import("resource://formautofill/FormAutofillHeuristics.jsm");
 
-XPCOMUtils.defineLazyModuleGetter(this, "FormAutofillHeuristics",
-                                  "resource://formautofill/FormAutofillHeuristics.jsm");
+const FIELD_NAME_INFO = Object.assign({}, FormAutofillUtils.FIELD_NAME_INFO);
+const AUTOFILL_FIELDS_THRESHOLD = FormAutofillUtils.AUTOFILL_FIELDS_THRESHOLD;
 
 this.log = null;
 FormAutofillUtils.defineLazyLogGetter(this, this.EXPORTED_SYMBOLS[0]);
@@ -69,7 +68,7 @@ FormAutofillHandler.prototype = {
   creditCardFieldDetails: null,
 
   get isValidAddressForm() {
-    return this.addressFieldDetails.length > FormAutofillUtils.AUTOFILL_FIELDS_THRESHOLD;
+    return this.addressFieldDetails.length > AUTOFILL_FIELDS_THRESHOLD;
   },
 
   get isValidCreditCardForm() {
@@ -108,20 +107,28 @@ FormAutofillHandler.prototype = {
 
   /**
    * Set fieldDetails from the form about fields that can be autofilled.
+   *
+   * @returns {Object}
+   *          An object containing addressFieldDetails and creditCardFieldDetails
+   *          for the later use.
    */
   collectFormFields() {
     this._cacheValue.allFieldNames = null;
     this._formFieldCount = this.form.elements.length;
     let fieldDetails = FormAutofillHeuristics.getFormInfo(this.form);
     this.fieldDetails = fieldDetails ? fieldDetails : [];
-    log.debug("Collected details on", this.fieldDetails.length, "fields");
 
     this.addressFieldDetails = this.fieldDetails.filter(
-      detail => FormAutofillUtils.isAddressField(detail.fieldName)
+      detail => this.isAddressField(detail.fieldName)
     );
     this.creditCardFieldDetails = this.fieldDetails.filter(
-      detail => FormAutofillUtils.isCreditCardField(detail.fieldName)
+      detail => this.isCreditCardField(detail.fieldName)
     );
+
+    return {
+      addressFieldDetails: this.isValidAddressForm ? this.addressFieldDetails : null,
+      creditCardFieldDetails: this.isValidCreditCardForm ? this.creditCardFieldDetails : null,
+    };
   },
 
   getFieldDetailByName(fieldName) {
@@ -399,5 +406,13 @@ FormAutofillHandler.prototype = {
     });
 
     return profile;
+  },
+
+  isAddressField(fieldName) {
+    return !!FIELD_NAME_INFO[fieldName] && !this.isCreditCardField(fieldName);
+  },
+
+  isCreditCardField(fieldName) {
+    return FIELD_NAME_INFO[fieldName] == "creditCard";
   },
 };
