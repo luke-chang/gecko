@@ -105,7 +105,7 @@ AutofillProfileAutoCompleteSearch.prototype = {
       return;
     }
 
-    let collectionName = FormAutofillUtils.isAddressField(info.fieldName) ?
+    let collectionName = FormAutofillHandler.prototype.isAddressField(info.fieldName) ?
       "addresses" : "creditCards";
 
     this._getRecords({collectionName, info, searchString}).then((records) => {
@@ -458,11 +458,6 @@ var FormAutofillContent = {
     if (!this.savedFieldNames) {
       this.log.debug("identifyAutofillFields: savedFieldNames are not known yet");
       Services.cpmm.sendAsyncMessage("FormAutofill:InitStorage");
-    }
-
-    if (!FormAutofillUtils.isFieldEligibleForAutofill(element)) {
-      this.log.debug("Not an eligible field.");
-      return;
     }
 
     let formHandler = this.getFormHandler(element);

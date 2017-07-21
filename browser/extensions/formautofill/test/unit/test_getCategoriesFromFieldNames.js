@@ -2,6 +2,7 @@
 "use strict";
 
 Cu.import("resource://formautofill/FormAutofillUtils.jsm");
+Cu.import("resource://formautofill/FormAutofillHandler.jsm");
 
 add_task(async function test_isAddressField_isCreditCardField() {
   const TEST_CASES = {
@@ -42,10 +43,10 @@ add_task(async function test_isAddressField_isCreditCardField() {
   for (let fieldName of Object.keys(TEST_CASES)) {
     do_print("Starting testcase: " + fieldName);
     let info = TEST_CASES[fieldName];
-    Assert.equal(FormAutofillUtils.isAddressField(fieldName),
+    Assert.equal(FormAutofillHandler.prototype.isAddressField(fieldName),
                  info.isAddressField,
                  "isAddressField");
-    Assert.equal(FormAutofillUtils.isCreditCardField(fieldName),
+    Assert.equal(FormAutofillHandler.prototype.isCreditCardField(fieldName),
                  info.isCreditCardField,
                  "isCreditCardField");
   }

@@ -2,6 +2,7 @@
  * Provides infrastructure for automated formautofill components tests.
  */
 
+/* global FormAutofillHeuristics */
 /* exported getTempFile, loadFormAutofillContent, runHeuristicsTest, sinon,
  *          initProfileStorage, getSyncChangeCounter, objectMatches
  */
@@ -118,7 +119,7 @@ async function initProfileStorage(fileName, records) {
 }
 
 function runHeuristicsTest(patterns, fixturePathPrefix) {
-  Cu.import("resource://formautofill/FormAutofillHeuristics.jsm");
+  Cu.import("resource://formautofill/FormAutofillHandler.jsm");
   Cu.import("resource://formautofill/FormAutofillUtils.jsm");
 
   patterns.forEach(testPattern => {

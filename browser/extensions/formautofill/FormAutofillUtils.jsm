@@ -15,7 +15,7 @@ Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 this.FormAutofillUtils = {
   get AUTOFILL_FIELDS_THRESHOLD() { return 3; },
 
-  _fieldNameInfo: {
+  FIELD_NAME_INFO: {
     "name": "name",
     "given-name": "name",
     "additional-name": "name",
@@ -45,16 +45,8 @@ this.FormAutofillUtils = {
   },
   _addressDataLoaded: false,
 
-  isAddressField(fieldName) {
-    return !!this._fieldNameInfo[fieldName] && !this.isCreditCardField(fieldName);
-  },
-
-  isCreditCardField(fieldName) {
-    return this._fieldNameInfo[fieldName] == "creditCard";
-  },
-
   getCategoryFromFieldName(fieldName) {
-    return this._fieldNameInfo[fieldName];
+    return this.FIELD_NAME_INFO[fieldName];
   },
 
   getCategoriesFromFieldNames(fieldNames) {

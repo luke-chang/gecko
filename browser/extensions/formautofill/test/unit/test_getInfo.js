@@ -1,6 +1,6 @@
 "use strict";
 
-Cu.import("resource://formautofill/FormAutofillHeuristics.jsm");
+Cu.import("resource://formautofill/FormAutofillHandler.jsm");
 
 const TESTCASES = [
   {
