@@ -429,7 +429,12 @@ var FormAutofillContent = {
    *
    */
   getFormHandler(element) {
-    let rootElement = FormLikeFactory.findRootForField(element);
+    // The algorithm to get the root element should align with
+    // FormLikeFactory.findRootForField().
+    let rootElement = element.form;
+    if (!rootElement) {
+      rootElement = element.ownerDocument.documentElement;
+    }
     return this._formsDetails.get(rootElement);
   },
 
@@ -453,10 +458,7 @@ var FormAutofillContent = {
   },
 
   identifyAutofillFields(element) {
-    this.log.debug("identifyAutofillFields:", "" + element.ownerDocument.location);
-
     if (!this.savedFieldNames) {
-      this.log.debug("identifyAutofillFields: savedFieldNames are not known yet");
       Services.cpmm.sendAsyncMessage("FormAutofill:InitStorage");
     }
 
@@ -464,32 +466,23 @@ var FormAutofillContent = {
     if (!formHandler) {
       let formLike = FormLikeFactory.createFromField(element);
       formHandler = new FormAutofillHandler(formLike);
+      this._formsDetails.set(formHandler.form.rootElement, formHandler);
     } else if (!formHandler.isFormChangedSinceLastCollection) {
-      this.log.debug("No control is removed or inserted since last collection.");
       return;
     }
 
-    formHandler.collectFormFields();
+    let {addressFieldDetails, creditCardFieldDetails} = formHandler.collectFormFields();
 
-    this._formsDetails.set(formHandler.form.rootElement, formHandler);
-    this.log.debug("Adding form handler to _formsDetails:", formHandler);
-
-    if (formHandler.isValidAddressForm) {
-      formHandler.addressFieldDetails.forEach(
+    if (addressFieldDetails) {
+      addressFieldDetails.forEach(
         detail => this._markAsAutofillField(detail.elementWeakRef.get())
       );
-    } else {
-      this.log.debug("Ignoring address related fields since it has only",
-                     formHandler.addressFieldDetails.length,
-                     "field(s)");
     }
 
-    if (formHandler.isValidCreditCardForm) {
-      formHandler.creditCardFieldDetails.forEach(
+    if (creditCardFieldDetails) {
+      creditCardFieldDetails.forEach(
         detail => this._markAsAutofillField(detail.elementWeakRef.get())
       );
-    } else {
-      this.log.debug("Ignoring credit card related fields since it's without credit card number field");
     }
   },
 

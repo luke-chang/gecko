@@ -18,7 +18,9 @@ Cu.import("resource://formautofill/FormAutofillUtils.jsm");
 
 const PREF_HEURISTICS_ENABLED = "extensions.formautofill.heuristics.enabled";
 
-const ALLOWED_TYPES = Array.from(FormAutofillUtils.ALLOWED_TYPES);
+// This list should align with the same one in FormAutofillFrameScript.js.
+const ALLOWED_TYPES = ["text", "email", "tel", "number"];
+
 const FIELD_NAME_INFO = Object.assign({}, FormAutofillUtils.FIELD_NAME_INFO);
 const AUTOFILL_FIELDS_THRESHOLD = FormAutofillUtils.AUTOFILL_FIELDS_THRESHOLD;
 
@@ -111,13 +113,16 @@ FormAutofillHandler.prototype = {
 
   /**
    * Set fieldDetails from the form about fields that can be autofilled.
+   *
+   * @returns {Object}
+   *          An object containing addressFieldDetails and creditCardFieldDetails
+   *          for the later use.
    */
   collectFormFields() {
     this._cacheValue.allFieldNames = null;
     this._formFieldCount = this.form.elements.length;
     let fieldDetails = FormAutofillHeuristics.getFormInfo(this.form);
     this.fieldDetails = fieldDetails ? fieldDetails : [];
-    log.debug("Collected details on", this.fieldDetails.length, "fields");
 
     this.addressFieldDetails = this.fieldDetails.filter(
       detail => this.isAddressField(detail.fieldName)
@@ -125,6 +130,11 @@ FormAutofillHandler.prototype = {
     this.creditCardFieldDetails = this.fieldDetails.filter(
       detail => this.isCreditCardField(detail.fieldName)
     );
+
+    return {
+      addressFieldDetails: this.isValidAddressForm ? this.addressFieldDetails : null,
+      creditCardFieldDetails: this.isValidCreditCardForm ? this.creditCardFieldDetails : null,
+    };
   },
 
   getFieldDetailByName(fieldName) {
@@ -459,7 +469,6 @@ this.FormAutofillHeuristics = {
                                  f.contactType == info.contactType &&
                                  f.fieldName == info.fieldName)) {
         // A field with the same identifier already exists.
-        log.debug("Not collecting a field matching another with the same info:", info);
         continue;
       }
 
@@ -528,18 +537,28 @@ this.FormAutofillHeuristics = {
     return null;
   },
 
-  getInfo(element, fieldDetails) {
-    let autocomplete = element.autocomplete;
-    let tagName = element.tagName;
-    let type = element.type;
-
+  _isFieldEligibleForAutofill(element, autocomplete, type) {
     if (autocomplete == "off") {
-      return null;
-    } else if (tagName == "INPUT") {
+      return false;
+    }
+
+    let tagName = element.tagName;
+    if (tagName == "INPUT") {
       if (!ALLOWED_TYPES.includes(type)) {
-        return null;
+        return false;
       }
     } else if (tagName != "SELECT") {
+      return false;
+    }
+
+    return true;
+  },
+
+  getInfo(element, fieldDetails) {
+    let autocomplete = element.autocomplete;
+    let type = element.type;
+
+    if (!this._isFieldEligibleForAutofill(element, autocomplete, type)) {
       return null;
     }
 
@@ -580,7 +599,6 @@ this.FormAutofillHeuristics = {
     }
     let labels = this.findLabelElements(element);
     if (!labels || labels.length == 0) {
-      log.debug("No label found for", element);
       return null;
     }
     for (let label of labels) {
@@ -653,7 +671,6 @@ this.FormAutofillHeuristics = {
     }
 
     if (labels.length > 0) {
-      log.debug("Label found by ID", id);
       return labels;
     }
 
@@ -665,7 +682,6 @@ this.FormAutofillHeuristics = {
       if (parent.tagName == "LABEL" &&
           parent.control == element &&
           !parent.hasAttribute("for")) {
-        log.debug("Label found in input's parent or ancestor.");
         return [parent];
       }
       parent = parent.parentNode;

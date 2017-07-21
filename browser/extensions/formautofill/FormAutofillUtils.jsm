@@ -92,24 +92,6 @@ this.FormAutofillUtils = {
     return doc.querySelectorAll("input, select");
   },
 
-  ALLOWED_TYPES: ["text", "email", "tel", "number"],
-  isFieldEligibleForAutofill(element) {
-    if (element.autocomplete == "off") {
-      return false;
-    }
-
-    if (element instanceof Ci.nsIDOMHTMLInputElement) {
-      // `element.type` can be recognized as `text`, if it's missing or invalid.
-      if (!this.ALLOWED_TYPES.includes(element.type)) {
-        return false;
-      }
-    } else if (!(element instanceof Ci.nsIDOMHTMLSelectElement)) {
-      return false;
-    }
-
-    return true;
-  },
-
   loadDataFromScript(url, sandbox = {}) {
     let scriptLoader = Cc["@mozilla.org/moz/jssubscript-loader;1"]
                          .getService(Ci.mozIJSSubScriptLoader);
