@@ -84,6 +84,7 @@ TESTCASES.forEach(testcase => {
 
     let input = doc.getElementById(testcase.inputId);
     let labels = FormAutofillHeuristics.findLabelElements(input);
+    FormAutofillHeuristics.clearLabelMap();
 
     Assert.deepEqual(labels.map(l => l.id), testcase.expectedLabelIds);
   });

@@ -483,6 +483,8 @@ this.FormAutofillHeuristics = {
       fieldDetails.push(formatWithElement);
     }
 
+    this.clearLabelMap();
+
     return fieldDetails;
   },
 
@@ -657,37 +659,50 @@ this.FormAutofillHeuristics = {
     return strings;
   },
 
-  findLabelElements(element) {
-    let document = element.ownerDocument;
-    let id = element.id;
-    let labels = [];
-    // TODO: querySelectorAll is inefficient here. However, bug 1339726 is for
-    // a more efficient implementation from DOM API perspective. This function
-    // should be refined after input.labels API landed.
-    for (let label of document.querySelectorAll("label[for]")) {
-      if (id == label.htmlFor) {
-        labels.push(label);
+  generateLabelMap(doc) {
+    let mappedLabels = {};
+    let unmappedLabels = [];
+
+    for (let label of doc.getElementsByTagName("label")) {
+      let id = label.htmlFor;
+      if (!id) {
+        let control = label.control;
+        if (!control) {
+          continue;
+        }
+        id = control.id;
+      }
+      if (id) {
+        if (!mappedLabels[id]) {
+          mappedLabels[id] = [label];
+        } else {
+          mappedLabels[id].push(label);
+        }
+      } else {
+        unmappedLabels.push(label);
       }
     }
 
-    if (labels.length > 0) {
+    this._mappedLabels = mappedLabels;
+    this._unmappedLabels = unmappedLabels;
+  },
+
+  clearLabelMap() {
+    delete this._mappedLabels;
+    delete this._unmappedLabels;
+  },
+
+  findLabelElements(element) {
+    if (!this._mappedLabels) {
+      this.generateLabelMap(element.ownerDocument);
+    }
+
+    let id = element.id;
+    let labels = this._mappedLabels[id];
+    if (labels) {
       return labels;
     }
-
-    let parent = element.parentNode;
-    if (!parent) {
-      return [];
-    }
-    do {
-      if (parent.tagName == "LABEL" &&
-          parent.control == element &&
-          !parent.hasAttribute("for")) {
-        return [parent];
-      }
-      parent = parent.parentNode;
-    } while (parent);
-
-    return [];
+    return this._unmappedLabels.filter(label => label.control == element);
   },
 };
 
