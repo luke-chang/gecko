@@ -41,7 +41,18 @@ function onMaybeOpenPopup(evt) {
 }
 
 function startup() {
-  if (Services.prefs.getStringPref("extensions.formautofill.available") != "on") {
+  let featureAvailable = false;
+  let prefAvailable = Services.prefs.getCharPref("extensions.formautofill.available");
+
+  if (prefAvailable == "on") {
+    featureAvailable = true;
+  } else if (prefAvailable == "detect") {
+    let locale = Services.locale.getRequestedLocale();
+    let region = Services.prefs.getCharPref("browser.search.region", "");
+    featureAvailable = (locale == "en-US" && region == "US");
+  }
+
+  if (!featureAvailable) {
     Services.prefs.clearUserPref("dom.forms.autocomplete.formautofill");
     return;
   }
