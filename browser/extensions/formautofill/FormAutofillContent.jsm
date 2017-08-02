@@ -487,6 +487,24 @@ var FormAutofillContent = {
     let formHandler = this.getFormHandler(element);
     if (!formHandler) {
       let formLike = FormLikeFactory.createFromField(element);
+
+      let validType = FormAutofillUtils.ALLOWED_TYPES;
+      let elements = formLike.elements;
+      let length = elements.length;
+      let validCount = 0;
+
+      for (let i = 0; i < length; i++) {
+        let element = elements[i];
+        let tagName = element.tagName;
+        if (tagName == "SELECT" || (tagName == "INPUT" && validType.includes(element.type))) {
+          validCount++;
+        }
+      }
+
+      if (validCount < FormAutofillUtils.AUTOFILL_FIELDS_THRESHOLD) {
+        return;
+      }
+
       formHandler = new FormAutofillHandler(formLike);
     } else if (!formHandler.isFormChangedSinceLastCollection) {
       this.log.debug("No control is removed or inserted since last collection.");
