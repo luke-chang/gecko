@@ -300,6 +300,17 @@ const ADDRESS_NORMALIZE_TESTCASES = [
     },
     expectedResult: {
       "country": "US",
+      "country-name": "United States",
+    },
+  },
+  {
+    description: "Has \"country\" with full country name",
+    address: {
+      "country": "united states",
+    },
+    expectedResult: {
+      "country": "US",
+      "country-name": "United States",
     },
   },
   {
@@ -309,6 +320,7 @@ const ADDRESS_NORMALIZE_TESTCASES = [
     },
     expectedResult: {
       "country": undefined,
+      "country-name": undefined,
     },
   },
   {
@@ -379,8 +391,8 @@ const ADDRESS_NORMALIZE_TESTCASES = [
       "country-name": "united states",
     },
     expectedResult: {
-      "country": undefined,
-      "country-name": undefined,
+      "country": "US",
+      "country-name": "United States",
     },
   },
   {

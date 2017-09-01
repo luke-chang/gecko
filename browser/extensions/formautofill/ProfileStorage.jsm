@@ -1281,9 +1281,17 @@ class Addresses extends AutofillRecords {
     let country;
 
     if (address.country) {
-      country = address.country.toUpperCase();
-    } else if (address["country-name"]) {
+      country = FormAutofillUtils.identifyCountryCode(address.country);
+    }
+    if (!country && address["country-name"]) {
       country = FormAutofillUtils.identifyCountryCode(address["country-name"]);
+    }
+
+    // The "identifyCountryCode" can only identify currently-supported countries
+    // ("US" in MVP). Uses "address.country" as the final fallback so we won't
+    // lose any valid country code.
+    if (!country && address.country) {
+      country = address.country.toUpperCase();
     }
 
     // Only values included in the region list will be saved.
