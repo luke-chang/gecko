@@ -6,6 +6,7 @@
 
 // The duplication of some of these fixtures between tests is unfortunate.
 const TEST_STORE_FILE_NAME = "test-profile.json";
+const TEST_COLLECTION_NAME = "addresses";
 
 const TEST_ADDRESS_1 = {
   "given-name": "Timothy",
@@ -17,7 +18,7 @@ const TEST_ADDRESS_1 = {
   "address-level1": "MA",
   "postal-code": "02139",
   country: "US",
-  tel: "+1 617 253 5702",
+  tel: "+16172535702",
   email: "timbl@w3.org",
 };
 
@@ -31,6 +32,13 @@ const TEST_ADDRESS_3 = {
   "postal-code": "12345",
 };
 
+const TEST_CREDIT_CARD_1 = {
+  "cc-name": "John Doe",
+  "cc-number": "1234567812345678",
+  "cc-exp-month": 4,
+  "cc-exp-year": 2017,
+};
+
 // storage.get() doesn't support getting deleted items. However, this test
 // wants to do that, so rather than making .get() support that just for this
 // test, we use this helper.
@@ -42,7 +50,7 @@ function findGUID(storage, guid, options) {
 }
 
 add_task(async function test_changeCounter() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1]);
 
   let [address] = profileStorage.addresses.getAll();
@@ -54,7 +62,7 @@ add_task(async function test_changeCounter() {
 });
 
 add_task(async function test_pushChanges() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   profileStorage.addresses.pullSyncChanges(); // force sync metadata for all items
@@ -111,7 +119,7 @@ async function checkingSyncChange(action, callback) {
 }
 
 add_task(async function test_add_sourceSync() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, []);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME, []);
 
   // Hardcode a guid so that we don't need to generate a dynamic regex
   let guid = "aaaaaaaaaaaa";
@@ -130,7 +138,7 @@ add_task(async function test_add_sourceSync() {
 });
 
 add_task(async function test_add_tombstone_sourceSync() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, []);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME, []);
 
   let guid = profileStorage.addresses._generateGUID();
   let testAddr = {guid, deleted: true};
@@ -154,7 +162,7 @@ add_task(async function test_add_tombstone_sourceSync() {
 });
 
 add_task(async function test_add_resurrects_tombstones() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, []);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME, []);
 
   let guid = profileStorage.addresses._generateGUID();
 
@@ -175,7 +183,8 @@ add_task(async function test_add_resurrects_tombstones() {
 });
 
 add_task(async function test_remove_sourceSync_localChanges() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, [TEST_ADDRESS_1]);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
+                                                [TEST_ADDRESS_1]);
   profileStorage.addresses.pullSyncChanges(); // force sync metadata
 
   let [{guid}] = profileStorage.addresses.getAll();
@@ -192,7 +201,7 @@ add_task(async function test_remove_sourceSync_localChanges() {
 
 add_task(async function test_remove_sourceSync_unknown() {
   // remove a record not stored locally
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, []);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME, []);
 
   let guid = profileStorage.addresses._generateGUID();
   await checkingSyncChange("remove", () =>
@@ -207,7 +216,7 @@ add_task(async function test_remove_sourceSync_unknown() {
 
 add_task(async function test_remove_sourceSync_unchanged() {
   // Remove a local record without a change counter.
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, []);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME, []);
 
   let guid = profileStorage.addresses._generateGUID();
   let addr = Object.assign({guid, version: 1}, TEST_ADDRESS_1);
@@ -228,7 +237,7 @@ add_task(async function test_remove_sourceSync_unchanged() {
 });
 
 add_task(async function test_pullSyncChanges() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let startAddresses = profileStorage.addresses.getAll();
@@ -291,7 +300,7 @@ add_task(async function test_pullSyncChanges() {
 
 add_task(async function test_pullPushChanges() {
   // round-trip changes between pull and push
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, []);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME, []);
   let psa = profileStorage.addresses;
 
   let guid1 = psa.add(TEST_ADDRESS_1);
@@ -323,7 +332,7 @@ add_task(async function test_pullPushChanges() {
 });
 
 add_task(async function test_changeGUID() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, []);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME, []);
 
   let newguid = () => profileStorage.addresses._generateGUID();
 
@@ -363,36 +372,49 @@ add_task(async function test_changeGUID() {
 });
 
 add_task(async function test_findDuplicateGUID() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
-                                                [TEST_ADDRESS_1]);
+  const TEST_RECORDS = {
+    "addresses": [TEST_ADDRESS_1],
+    "creditCards": [TEST_CREDIT_CARD_1],
+  };
 
-  let [record] = profileStorage.addresses.getAll({rawData: true});
-  await Assert.rejects(profileStorage.addresses.findDuplicateGUID(record),
-    /Record \w+ already exists/,
-    "Should throw if the GUID already exists");
+  for (let collectionName of Object.keys(TEST_RECORDS)) {
+    let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, collectionName,
+                                                  TEST_RECORDS[collectionName]);
+    let [record] = profileStorage[collectionName].getAll({rawData: true});
+    await Assert.rejects(profileStorage[collectionName].findDuplicateGUID(record),
+      /Record \w+ already exists/,
+      "Should throw if the GUID already exists");
 
-  // Add a malformed record, passing `sourceSync` to work around the record
-  // normalization logic that would prevent this.
-  let timeLastModified = Date.now();
-  let timeCreated = timeLastModified - 60 * 1000;
+    let targetRecord = Object.assign({}, TEST_RECORDS[collectionName][0], {
+      guid: profileStorage[collectionName]._generateGUID(),
+      version: record.version,
+    });
+    let duplicateGUID = await profileStorage[collectionName].findDuplicateGUID(targetRecord);
+    equal(duplicateGUID, record.guid);
 
-  profileStorage.addresses.add({
-    guid: profileStorage.addresses._generateGUID(),
-    version: 1,
-    timeCreated,
-    timeLastModified,
-  }, {sourceSync: true});
+    // Add a malformed record, passing `sourceSync` to work around the record
+    // normalization logic that would prevent this.
+    let timeLastModified = Date.now();
+    let timeCreated = timeLastModified - 60 * 1000;
 
-  strictEqual(await profileStorage.addresses.findDuplicateGUID({
-    guid: profileStorage.addresses._generateGUID(),
-    version: 1,
-    timeCreated,
-    timeLastModified,
-  }), null, "Should ignore internal fields and malformed records");
+    profileStorage[collectionName].add({
+      guid: profileStorage[collectionName]._generateGUID(),
+      version: 1,
+      timeCreated,
+      timeLastModified,
+    }, {sourceSync: true});
+
+    strictEqual(await profileStorage[collectionName].findDuplicateGUID({
+      guid: profileStorage[collectionName]._generateGUID(),
+      version: 1,
+      timeCreated,
+      timeLastModified,
+    }), null, "Should ignore internal fields and malformed records");
+  }
 });
 
 add_task(async function test_reset() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();

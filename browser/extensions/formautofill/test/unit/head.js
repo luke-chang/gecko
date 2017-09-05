@@ -102,7 +102,7 @@ function getTempFile(leafName) {
   return file;
 }
 
-async function initProfileStorage(fileName, records) {
+async function initProfileStorage(fileName, collectionName, records) {
   let {ProfileStorage} = Cu.import("resource://formautofill/ProfileStorage.jsm", {});
   let path = getTempFile(fileName).path;
   let profileStorage = new ProfileStorage(path);
@@ -115,7 +115,11 @@ async function initProfileStorage(fileName, records) {
   let onChanged = TestUtils.topicObserved("formautofill-storage-changed",
                                           (subject, data) => data == "add");
   for (let record of records) {
-    do_check_true(profileStorage.addresses.add(record));
+    let clonedRecord = Object.assign({}, record);
+    if (profileStorage[collectionName].encryptCCNumberFields) {
+      await profileStorage[collectionName].encryptCCNumberFields(clonedRecord);
+    }
+    do_check_true(profileStorage[collectionName].add(clonedRecord));
     await onChanged;
   }
   await profileStorage._saveImmediately();

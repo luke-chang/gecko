@@ -21,6 +21,7 @@ Services.prefs.setCharPref("extensions.formautofill.loglevel", "Trace");
 initTestLogging("Trace");
 
 const TEST_STORE_FILE_NAME = "test-profile.json";
+const TEST_COLLECTION_NAME = "addresses";
 
 const TEST_PROFILE_1 = {
   "given-name": "Timothy",
@@ -67,7 +68,7 @@ function expectLocalProfiles(profileStorage, expected) {
 }
 
 async function setup() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME);
   // should always start with no profiles.
   Assert.equal(profileStorage.addresses.getAll({includeDeleted: true}).length, 0);
 

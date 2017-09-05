@@ -5,6 +5,7 @@
 "use strict";
 
 const TEST_STORE_FILE_NAME = "test-profile.json";
+const TEST_COLLECTION_NAME = "addresses";
 
 const TEST_ADDRESS_1 = {
   "given-name": "Timothy",
@@ -213,7 +214,7 @@ let do_check_record_matches = (recordWithMeta, record) => {
 };
 
 add_task(async function test_initialize() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME);
 
   do_check_eq(profileStorage._store.data.version, 1);
   do_check_eq(profileStorage._store.data.addresses.length, 0);
@@ -223,7 +224,7 @@ add_task(async function test_initialize() {
 
   await profileStorage._saveImmediately();
 
-  profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME);
+  profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME);
 
   Assert.deepEqual(profileStorage._store.data, data);
   for (let {_sync} of profileStorage._store.data.addresses) {
@@ -233,7 +234,7 @@ add_task(async function test_initialize() {
 });
 
 add_task(async function test_getAll() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();
@@ -259,7 +260,7 @@ add_task(async function test_getAll() {
 });
 
 add_task(async function test_get() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();
@@ -282,7 +283,7 @@ add_task(async function test_get() {
 });
 
 add_task(async function test_add() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();
@@ -304,7 +305,7 @@ add_task(async function test_add() {
 });
 
 add_task(async function test_update() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();
@@ -357,7 +358,7 @@ add_task(async function test_update() {
 });
 
 add_task(async function test_notifyUsed() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();
@@ -388,7 +389,7 @@ add_task(async function test_notifyUsed() {
 });
 
 add_task(async function test_remove() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();
@@ -412,7 +413,7 @@ add_task(async function test_remove() {
 MERGE_TESTCASES.forEach((testcase) => {
   add_task(async function test_merge() {
     do_print("Starting testcase: " + testcase.description);
-    let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+    let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                   [testcase.addressInStorage]);
     let addresses = profileStorage.addresses.getAll();
     // Merge address and verify the guid in notifyObservers subject
@@ -434,7 +435,8 @@ MERGE_TESTCASES.forEach((testcase) => {
 });
 
 add_task(async function test_merge_same_address() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, [TEST_ADDRESS_1]);
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
+                                                [TEST_ADDRESS_1]);
   let addresses = profileStorage.addresses.getAll();
   let timeLastModified = addresses[0].timeLastModified;
   // Merge same address will still return true but it won't update timeLastModified.
@@ -443,7 +445,7 @@ add_task(async function test_merge_same_address() {
 });
 
 add_task(async function test_merge_unable_merge() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();
@@ -455,7 +457,7 @@ add_task(async function test_merge_unable_merge() {
 });
 
 add_task(async function test_mergeToStorage() {
-  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, TEST_COLLECTION_NAME,
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
   // Merge an address to storage
   let anotherAddress = profileStorage.addresses._clone(TEST_ADDRESS_2);
