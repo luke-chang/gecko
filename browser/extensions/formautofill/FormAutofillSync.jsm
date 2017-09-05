@@ -147,6 +147,9 @@ FormAutofillStore.prototype = {
     let entry = this.storage.get(id, {
       rawData: true,
     });
+    if (this.storage.decryptCCNumberFields) {
+      await this.storage.decryptCCNumberFields(entry);
+    }
     if (entry) {
       record.fromEntry(entry);
     } else {

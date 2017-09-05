@@ -508,7 +508,7 @@ class AutofillRecords {
     }
 
     // The record is cloned to avoid accidental modifications from outside.
-    let clonedRecord = this._clone(recordFound);
+    let clonedRecord = this._cloneAndCleanUp(recordFound);
     if (rawData) {
       this._stripComputedFields(clonedRecord);
     } else {
@@ -532,7 +532,7 @@ class AutofillRecords {
 
     let records = this._store.data[this._collectionName].filter(r => !r.deleted || includeDeleted);
     // Records are cloned to avoid accidental modifications from outside.
-    let clonedRecords = records.map(r => this._clone(r));
+    let clonedRecords = records.map(r => this._cloneAndCleanUp(r));
     clonedRecords.forEach(record => {
       if (rawData) {
         this._stripComputedFields(record);
@@ -596,6 +596,8 @@ class AutofillRecords {
    * remote record, and the shared parent that we synthesize from the last
    * synced fields - see _maybeStoreLastSyncedField.
    *
+   * NOTE: localRecord and remoteRecord are both decrypted in creditCard case.
+   *
    * @param   {Object} localRecord
    *          The changed local record, currently in storage.
    * @param   {Object} remoteRecord
@@ -617,6 +619,12 @@ class AutofillRecords {
     }
 
     for (let field of this.VALID_FIELDS) {
+      // It's unnecessary to handle encrypted fields because the incoming
+      // records should already be decrypted.
+      if (field.endsWith("-encrypted")) {
+        continue;
+      }
+
       let isLocalSame = false;
       let isRemoteSame = false;
       if (field in sync.lastSyncedFields) {
@@ -624,8 +632,19 @@ class AutofillRecords {
         // determine if the local and remote values are different. Hashing is
         // expensive, but we don't expect this to happen frequently.
         let lastSyncedValue = sync.lastSyncedFields[field];
-        isLocalSame = lastSyncedValue == sha512(localRecord[field]);
-        isRemoteSame = lastSyncedValue == sha512(remoteRecord[field]);
+        let localValue = localRecord[field];
+        let remoteValue = remoteRecord[field];
+
+        // "cc-number" is stored in a masked format and "lastSyncedValue" is
+        // calculated based on it so we should get masked numbers before
+        // comparing them.
+        if (field == "cc-number") {
+          localValue = this._getMaskedCCNumber(localValue);
+          remoteValue = this._getMaskedCCNumber(remoteValue);
+        }
+
+        isLocalSame = lastSyncedValue == sha512(localValue);
+        isRemoteSame = lastSyncedValue == sha512(remoteValue);
       } else {
         // Otherwise, if the field hasn't changed since the last sync, we know
         // it's the same locally.
@@ -676,11 +695,15 @@ class AutofillRecords {
    *          the sync is interrupted after the record is merged, but before
    *          it's uploaded.
    */
-  _replaceRecordAt(index, remoteRecord, {keepSyncMetadata = false} = {}) {
+  async _replaceRecordAt(index, remoteRecord, {keepSyncMetadata = false} = {}) {
     let localRecord = this._store.data[this._collectionName][index];
     let newRecord = this._clone(remoteRecord);
 
+    if (this.encryptCCNumberFields) {
+      await this.encryptCCNumberFields(newRecord);
+    }
     this._stripComputedFields(newRecord);
+    this._normalizeFields(newRecord);
 
     this._store.data[this._collectionName][index] = newRecord;
 
@@ -727,7 +750,7 @@ class AutofillRecords {
    *          A clone of the local record with a new GUID.
    */
   _forkLocalRecord(localRecord) {
-    let forkedLocalRecord = this._clone(localRecord);
+    let forkedLocalRecord = this._cloneAndCleanUp(localRecord);
 
     this._stripComputedFields(forkedLocalRecord);
 
@@ -771,22 +794,26 @@ class AutofillRecords {
       throw new Error(`Record ${remoteRecord.guid} not found`);
     }
 
-    let localRecord = this._store.data[this._collectionName][localIndex];
+    let localRecord = this._clone(this._store.data[this._collectionName][localIndex]);
     let sync = this._getSyncMetaData(localRecord, true);
 
     let forkedGUID = null;
 
     if (sync.changeCounter === 0) {
       // Local not modified. Replace local with remote.
-      this._replaceRecordAt(localIndex, remoteRecord, {
+      await this._replaceRecordAt(localIndex, remoteRecord, {
         keepSyncMetadata: false,
       });
     } else {
+      if (this.decryptCCNumberFields) {
+        await this.decryptCCNumberFields(localRecord);
+      }
+
       let mergedRecord = this._mergeSyncedRecords(localRecord, remoteRecord);
       if (mergedRecord) {
         // Local and remote modified, but we were able to merge. Replace the
         // local record with the merged record.
-        this._replaceRecordAt(localIndex, mergedRecord, {
+        await this._replaceRecordAt(localIndex, mergedRecord, {
           keepSyncMetadata: true,
         });
       } else {
@@ -794,7 +821,7 @@ class AutofillRecords {
         // with the merged record.
         let forkedLocalRecord = this._forkLocalRecord(localRecord);
         forkedGUID = forkedLocalRecord.guid;
-        this._replaceRecordAt(localIndex, remoteRecord, {
+        await this._replaceRecordAt(localIndex, remoteRecord, {
           keepSyncMetadata: false,
         });
       }
@@ -1015,6 +1042,12 @@ class AutofillRecords {
         // another incoming item.
         continue;
       }
+
+      profile = this._clone(profile);
+      if (this.decryptCCNumberFields) {
+        await this.decryptCCNumberFields(profile);
+      }
+
       let keys = new Set(Object.keys(record));
       for (let key of Object.keys(profile)) {
         keys.add(key);
@@ -1057,6 +1090,10 @@ class AutofillRecords {
    */
 
   _clone(record) {
+    return Object.assign({}, record);
+  }
+
+  _cloneAndCleanUp(record) {
     let result = {};
     for (let key in record) {
       // Do not expose hidden fields and fields with empty value (mainly used
