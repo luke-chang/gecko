@@ -1453,7 +1453,7 @@ class CreditCards extends AutofillRecords {
   }
 
   _normalizeFields(creditCard) {
-    // Check if cc-number is normalized(normalizeCCNumberFields should be called first).
+    // Check if cc-number is encrypted (encryptCCNumberFields should be called first).
     if (!creditCard["cc-number-encrypted"] || !creditCard["cc-number"].includes("*")) {
       throw new Error("Credit card number needs to be normalized first.");
     }
@@ -1495,14 +1495,19 @@ class CreditCards extends AutofillRecords {
     }
   }
 
+  _getMaskedCCNumber(ccNumber) {
+    return "*".repeat(ccNumber.length - 4) + ccNumber.substr(-4);
+  }
+
   /**
-   * Normalize credit card number related field for saving. It should always be
-   * called before adding/updating credit card records.
+   * Encrypt credit card number to "cc-number-encrypted" and replace "cc-number"
+   * with the masked number. It should always be called before saving credit card
+   * records.
    *
    * @param  {Object} creditCard
    *         The creditCard record with plaintext number only.
    */
-  async normalizeCCNumberFields(creditCard) {
+  async encryptCCNumberFields(creditCard) {
     // Fields that should not be set by content.
     delete creditCard["cc-number-encrypted"];
 
@@ -1516,7 +1521,20 @@ class CreditCards extends AutofillRecords {
       }
 
       creditCard["cc-number-encrypted"] = await MasterPassword.encrypt(ccNumber);
-      creditCard["cc-number"] = "*".repeat(ccNumber.length - 4) + ccNumber.substr(-4);
+      creditCard["cc-number"] = this._getMaskedCCNumber(ccNumber);
+    }
+  }
+
+  /**
+   * Decrypt credit card number and restore it to "cc-number".
+   *
+   * @param  {Object} creditCard
+   *         The creditCard record with encrypted credit card number field.
+   */
+  async decryptCCNumberFields(creditCard) {
+    if (creditCard["cc-number-encrypted"]) {
+      creditCard["cc-number"] = await MasterPassword.decrypt(creditCard["cc-number-encrypted"]);
+      delete creditCard["cc-number-encrypted"];
     }
   }
 }

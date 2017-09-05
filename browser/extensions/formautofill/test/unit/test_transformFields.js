@@ -622,7 +622,7 @@ add_task(async function test_computeCreditCardFields() {
 
   for (let testcase of CREDIT_CARD_COMPUTE_TESTCASES) {
     let encryptedCC = Object.assign({}, testcase.creditCard);
-    await profileStorage.creditCards.normalizeCCNumberFields(encryptedCC);
+    await profileStorage.creditCards.encryptCCNumberFields(encryptedCC);
     profileStorage.creditCards.add(encryptedCC);
   }
   await profileStorage._saveImmediately();
@@ -646,7 +646,7 @@ add_task(async function test_normalizeCreditCardFields() {
 
   for (let testcase of CREDIT_CARD_NORMALIZE_TESTCASES) {
     let encryptedCC = Object.assign({}, testcase.creditCard);
-    await profileStorage.creditCards.normalizeCCNumberFields(encryptedCC);
+    await profileStorage.creditCards.encryptCCNumberFields(encryptedCC);
     profileStorage.creditCards.add(encryptedCC);
   }
   await profileStorage._saveImmediately();

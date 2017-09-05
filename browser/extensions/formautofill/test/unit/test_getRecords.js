@@ -167,8 +167,8 @@ add_task(async function test_getRecords_creditCards() {
   await formAutofillParent.profileStorage.initialize();
   let collection = profileStorage.creditCards;
   let decryptedCCNumber = [TEST_CREDIT_CARD_1["cc-number"], TEST_CREDIT_CARD_2["cc-number"]];
-  await collection.normalizeCCNumberFields(TEST_CREDIT_CARD_1);
-  await collection.normalizeCCNumberFields(TEST_CREDIT_CARD_2);
+  await collection.encryptCCNumberFields(TEST_CREDIT_CARD_1);
+  await collection.encryptCCNumberFields(TEST_CREDIT_CARD_2);
   sinon.stub(collection, "getAll", () => [Object.assign({}, TEST_CREDIT_CARD_1), Object.assign({}, TEST_CREDIT_CARD_2)]);
   let CreditCardsWithDecryptedNumber = [
     Object.assign({}, TEST_CREDIT_CARD_1, {"cc-number-decrypted": decryptedCCNumber[0]}),

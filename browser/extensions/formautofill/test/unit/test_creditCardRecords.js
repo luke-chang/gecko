@@ -69,11 +69,11 @@ let prepareTestCreditCards = async function(path) {
   let onChanged = TestUtils.topicObserved("formautofill-storage-changed",
                                           (subject, data) => data == "add");
   let encryptedCC_1 = Object.assign({}, TEST_CREDIT_CARD_1);
-  await profileStorage.creditCards.normalizeCCNumberFields(encryptedCC_1);
+  await profileStorage.creditCards.encryptCCNumberFields(encryptedCC_1);
   do_check_true(profileStorage.creditCards.add(encryptedCC_1));
   await onChanged;
   let encryptedCC_2 = Object.assign({}, TEST_CREDIT_CARD_2);
-  await profileStorage.creditCards.normalizeCCNumberFields(encryptedCC_2);
+  await profileStorage.creditCards.encryptCCNumberFields(encryptedCC_2);
   do_check_true(profileStorage.creditCards.add(encryptedCC_2));
   await profileStorage._saveImmediately();
 };
@@ -183,7 +183,7 @@ add_task(async function test_add() {
   do_check_eq(creditCards[0].timesUsed, 0);
 
   let encryptedCC_invalid = Object.assign({}, TEST_CREDIT_CARD_WITH_INVALID_FIELD);
-  await profileStorage.creditCards.normalizeCCNumberFields(encryptedCC_invalid);
+  await profileStorage.creditCards.encryptCCNumberFields(encryptedCC_invalid);
   Assert.throws(() => profileStorage.creditCards.add(encryptedCC_invalid),
     /"invalidField" is not a valid field\./);
 });
@@ -203,7 +203,7 @@ add_task(async function test_update() {
                                           (subject, data) => data == "update");
 
   do_check_neq(creditCards[1]["cc-name"], undefined);
-  await profileStorage.creditCards.normalizeCCNumberFields(TEST_CREDIT_CARD_3);
+  await profileStorage.creditCards.encryptCCNumberFields(TEST_CREDIT_CARD_3);
   profileStorage.creditCards.update(guid, TEST_CREDIT_CARD_3);
   await onChanged;
   await profileStorage._saveImmediately();
@@ -223,7 +223,7 @@ add_task(async function test_update() {
   );
 
   let encryptedCC_invalid = Object.assign({}, TEST_CREDIT_CARD_WITH_INVALID_FIELD);
-  await profileStorage.creditCards.normalizeCCNumberFields(encryptedCC_invalid);
+  await profileStorage.creditCards.encryptCCNumberFields(encryptedCC_invalid);
   Assert.throws(
     () => profileStorage.creditCards.update(guid, encryptedCC_invalid),
     /"invalidField" is not a valid field\./
@@ -236,11 +236,11 @@ add_task(async function test_validate() {
   let profileStorage = new ProfileStorage(path);
   await profileStorage.initialize();
 
-  await profileStorage.creditCards.normalizeCCNumberFields(TEST_CREDIT_CARD_WITH_INVALID_EXPIRY_DATE);
+  await profileStorage.creditCards.encryptCCNumberFields(TEST_CREDIT_CARD_WITH_INVALID_EXPIRY_DATE);
   profileStorage.creditCards.add(TEST_CREDIT_CARD_WITH_INVALID_EXPIRY_DATE);
-  await profileStorage.creditCards.normalizeCCNumberFields(TEST_CREDIT_CARD_WITH_2_DIGITS_YEAR);
+  await profileStorage.creditCards.encryptCCNumberFields(TEST_CREDIT_CARD_WITH_2_DIGITS_YEAR);
   profileStorage.creditCards.add(TEST_CREDIT_CARD_WITH_2_DIGITS_YEAR);
-  await profileStorage.creditCards.normalizeCCNumberFields(TEST_CREDIT_CARD_WITH_SPACES_BETWEEN_DIGITS);
+  await profileStorage.creditCards.encryptCCNumberFields(TEST_CREDIT_CARD_WITH_SPACES_BETWEEN_DIGITS);
   profileStorage.creditCards.add(TEST_CREDIT_CARD_WITH_SPACES_BETWEEN_DIGITS);
 
   let creditCards = profileStorage.creditCards.getAll();
@@ -256,20 +256,6 @@ add_task(async function test_validate() {
   do_check_eq(creditCards[1]["cc-exp"], year + "-" + month.toString().padStart(2, "0"));
 
   do_check_eq(creditCards[2]["cc-number"].length, 16);
-
-  try {
-    await profileStorage.creditCards.normalizeCCNumberFields(TEST_CREDIT_CARD_WITH_INVALID_NUMBERS);
-    throw new Error("Not receiving invalid characters error");
-  } catch (e) {
-    Assert.equal(e.message, "Credit card number contains invalid characters or is under 12 digits.");
-  }
-
-  try {
-    await profileStorage.creditCards.normalizeCCNumberFields(TEST_CREDIT_CARD_WITH_SHORT_NUMBERS);
-    throw new Error("Not receiving invalid characters error");
-  } catch (e) {
-    Assert.equal(e.message, "Credit card number contains invalid characters or is under 12 digits.");
-  }
 });
 
 add_task(async function test_notifyUsed() {
@@ -330,4 +316,34 @@ add_task(async function test_remove() {
   do_check_eq(creditCards.length, 1);
 
   do_check_eq(profileStorage.creditCards.get(guid), null);
+});
+
+add_task(async function test_encrypt_decrypt() {
+  let path = getTempFile(TEST_STORE_FILE_NAME).path;
+  let profileStorage = new ProfileStorage(path);
+  await profileStorage.initialize();
+
+  let creditCard = Object.assign({}, TEST_CREDIT_CARD_1);
+  await profileStorage.creditCards.encryptCCNumberFields(creditCard);
+
+  do_check_eq(creditCard["cc-number"], "************5678");
+  do_check_neq(creditCard["cc-number-encrypted"], undefined);
+  do_check_neq(creditCard["cc-number-encrypted"], TEST_CREDIT_CARD_1["cc-number"]);
+
+  await profileStorage.creditCards.decryptCCNumberFields(creditCard);
+
+  do_check_eq(creditCard["cc-number"], TEST_CREDIT_CARD_1["cc-number"]);
+  do_check_eq(creditCard["cc-number-encrypted"], undefined);
+
+  await Assert.rejects(
+    profileStorage.creditCards.encryptCCNumberFields({"cc-number": "abcdefghijklmnop"}),
+    /Credit card number contains invalid characters or is under 12 digits./,
+    "Should throw if cc-number contains invalid characters."
+  );
+
+  await Assert.rejects(
+    profileStorage.creditCards.encryptCCNumberFields({"cc-number": "12345678901"}),
+    /Credit card number contains invalid characters or is under 12 digits./,
+    "Should throw if cc-number is too short."
+  );
 });

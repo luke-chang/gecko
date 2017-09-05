@@ -199,7 +199,7 @@ FormAutofillParent.prototype = {
         break;
       }
       case "FormAutofill:SaveCreditCard": {
-        await this.profileStorage.creditCards.normalizeCCNumberFields(data.creditcard);
+        await this.profileStorage.creditCards.encryptCCNumberFields(data.creditcard);
         this.profileStorage.creditCards.add(data.creditcard);
         break;
       }
@@ -437,7 +437,7 @@ FormAutofillParent.prototype = {
       return;
     }
 
-    await this.profileStorage.creditCards.normalizeCCNumberFields(creditCard.record);
+    await this.profileStorage.creditCards.encryptCCNumberFields(creditCard.record);
     this.profileStorage.creditCards.add(creditCard.record);
   },
 

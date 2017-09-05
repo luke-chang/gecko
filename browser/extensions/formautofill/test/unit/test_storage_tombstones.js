@@ -45,8 +45,8 @@ function add_storage_task(test_function) {
 
     for (let [storage, record] of [[profileStorage.addresses, TEST_ADDRESS_1],
                                    [profileStorage.creditCards, testCC1]]) {
-      if (storage.normalizeCCNumberFields) {
-        await storage.normalizeCCNumberFields(record);
+      if (storage.encryptCCNumberFields) {
+        await storage.encryptCCNumberFields(record);
       }
       await test_function(storage, record);
     }

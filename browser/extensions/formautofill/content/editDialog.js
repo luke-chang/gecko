@@ -264,7 +264,7 @@ class EditCreditCard extends EditDialog {
       return;
     }
     let storage = await this.getStorage();
-    await storage.normalizeCCNumberFields(creditCard);
+    await storage.encryptCCNumberFields(creditCard);
     await this.saveRecord(creditCard, this._record ? this._record.guid : null);
     window.close();
   }
