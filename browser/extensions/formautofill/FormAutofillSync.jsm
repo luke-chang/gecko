@@ -123,7 +123,7 @@ FormAutofillStore.prototype = {
     }
 
     // No matching local record. Try to dedupe a NEW local record.
-    let localDupeID = this.storage.findDuplicateGUID(remoteRecord.toEntry());
+    let localDupeID = await this.storage.findDuplicateGUID(remoteRecord.toEntry());
     if (localDupeID) {
       this._log.trace(`Deduping local record ${localDupeID} to remote`, remoteRecord);
       // Change the local GUID to match the incoming record, then apply the
@@ -161,7 +161,7 @@ FormAutofillStore.prototype = {
     this._log.trace("Updating record", record);
 
     let entry = record.toEntry();
-    let {forkedGUID} = this.storage.reconcile(entry);
+    let {forkedGUID} = await this.storage.reconcile(entry);
     if (this._log.level <= Log.Level.Debug) {
       let forkedRecord = forkedGUID ? this.storage.get(forkedGUID) : null;
       let reconciledRecord = this.storage.get(record.id);

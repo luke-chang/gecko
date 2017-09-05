@@ -367,9 +367,9 @@ add_task(async function test_findDuplicateGUID() {
                                                 [TEST_ADDRESS_1]);
 
   let [record] = profileStorage.addresses.getAll({rawData: true});
-  Assert.throws(() => profileStorage.addresses.findDuplicateGUID(record),
-                /Record \w+ already exists/,
-                "Should throw if the GUID already exists");
+  await Assert.rejects(profileStorage.addresses.findDuplicateGUID(record),
+    /Record \w+ already exists/,
+    "Should throw if the GUID already exists");
 
   // Add a malformed record, passing `sourceSync` to work around the record
   // normalization logic that would prevent this.
@@ -383,7 +383,7 @@ add_task(async function test_findDuplicateGUID() {
     timeLastModified,
   }, {sourceSync: true});
 
-  strictEqual(profileStorage.addresses.findDuplicateGUID({
+  strictEqual(await profileStorage.addresses.findDuplicateGUID({
     guid: profileStorage.addresses._generateGUID(),
     version: 1,
     timeCreated,

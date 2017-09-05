@@ -760,7 +760,7 @@ class AutofillRecords {
    *          existing locally modified record if the conflicts could not be
    *          resolved.
    */
-  reconcile(remoteRecord) {
+  async reconcile(remoteRecord) {
     this._ensureMatchingVersion(remoteRecord);
     if (remoteRecord.deleted) {
       throw new Error(`Can't reconcile tombstone ${remoteRecord.guid}`);
@@ -992,7 +992,7 @@ class AutofillRecords {
    *          The GUID of the matching local record, or `null` if no records
    *          match.
    */
-  findDuplicateGUID(record) {
+  async findDuplicateGUID(record) {
     if (!record.guid) {
       throw new Error("Record missing GUID");
     }

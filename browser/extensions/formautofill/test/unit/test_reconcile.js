@@ -468,14 +468,12 @@ add_task(async function test_reconcile_unknown_version() {
   let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME);
 
   // Cross-version reconciliation isn't supported yet. See bug 1377204.
-  throws(() => {
-    profileStorage.addresses.reconcile({
-      "guid": "31d83d2725ec",
-      "version": 2,
-      "given-name": "Mark",
-      "family-name": "Hammond",
-    });
-  }, /Got unknown record version/);
+  await Assert.rejects(profileStorage.addresses.reconcile({
+    "guid": "31d83d2725ec",
+    "version": 2,
+    "given-name": "Mark",
+    "family-name": "Hammond",
+  }), /Got unknown record version/);
 });
 
 add_task(async function test_reconcile_idempotent() {
@@ -503,7 +501,7 @@ add_task(async function test_reconcile_idempotent() {
   };
 
   {
-    let {forkedGUID} = profileStorage.addresses.reconcile(remote);
+    let {forkedGUID} = await profileStorage.addresses.reconcile(remote);
     let updatedRecord = profileStorage.addresses.get(guid, {
       rawData: true,
     });
@@ -519,7 +517,7 @@ add_task(async function test_reconcile_idempotent() {
   }
 
   {
-    let {forkedGUID} = profileStorage.addresses.reconcile(remote);
+    let {forkedGUID} = await profileStorage.addresses.reconcile(remote);
     let updatedRecord = profileStorage.addresses.get(guid, {
       rawData: true,
     });
@@ -551,7 +549,7 @@ add_task(async function test_reconcile_three_way_merge() {
       rawData: true,
     });
 
-    let {forkedGUID} = profileStorage.addresses.reconcile(test.remote);
+    let {forkedGUID} = await profileStorage.addresses.reconcile(test.remote);
     let reconciledRecord = profileStorage.addresses.get(test.parent.guid, {
       rawData: true,
     });
