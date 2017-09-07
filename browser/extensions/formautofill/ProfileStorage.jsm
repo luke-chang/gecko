@@ -596,7 +596,7 @@ class AutofillRecords {
    * remote record, and the shared parent that we synthesize from the last
    * synced fields - see _maybeStoreLastSyncedField.
    *
-   * NOTE: localRecord and remoteRecord are both decrypted in creditCard case.
+   * NOTE: "remoteRecord" is decrypted in creditCard case.
    *
    * @param   {Object} localRecord
    *          The changed local record, currently in storage.
@@ -606,7 +606,9 @@ class AutofillRecords {
    *          The merged record, or `null` if there are conflicts and the
    *          records can't be merged.
    */
-  _mergeSyncedRecords(localRecord, remoteRecord) {
+  async _mergeSyncedRecords(localRecord, remoteRecord) {
+    this._toRawData(localRecord);
+
     let sync = this._getSyncMetaData(localRecord, true);
 
     // Copy all internal fields from the remote record. We'll update their
@@ -619,12 +621,6 @@ class AutofillRecords {
     }
 
     for (let field of this.VALID_FIELDS) {
-      // It's unnecessary to handle encrypted fields because the incoming
-      // records should already be decrypted.
-      if (field.endsWith("-encrypted")) {
-        continue;
-      }
-
       let isLocalSame = false;
       let isRemoteSame = false;
       if (field in sync.lastSyncedFields) {
@@ -695,13 +691,10 @@ class AutofillRecords {
    *          the sync is interrupted after the record is merged, but before
    *          it's uploaded.
    */
-  async _replaceRecordAt(index, remoteRecord, {keepSyncMetadata = false} = {}) {
+  _replaceRecordAt(index, remoteRecord, {keepSyncMetadata = false} = {}) {
     let localRecord = this._store.data[this._collectionName][index];
     let newRecord = this._clone(remoteRecord);
 
-    if (this.encryptCCNumberFields) {
-      await this.encryptCCNumberFields(newRecord);
-    }
     this._stripComputedFields(newRecord);
     this._normalizeFields(newRecord);
 
@@ -801,19 +794,15 @@ class AutofillRecords {
 
     if (sync.changeCounter === 0) {
       // Local not modified. Replace local with remote.
-      await this._replaceRecordAt(localIndex, remoteRecord, {
+      this._replaceRecordAt(localIndex, remoteRecord, {
         keepSyncMetadata: false,
       });
     } else {
-      if (this.decryptCCNumberFields) {
-        await this.decryptCCNumberFields(localRecord);
-      }
-
-      let mergedRecord = this._mergeSyncedRecords(localRecord, remoteRecord);
+      let mergedRecord = await this._mergeSyncedRecords(localRecord, remoteRecord);
       if (mergedRecord) {
         // Local and remote modified, but we were able to merge. Replace the
         // local record with the merged record.
-        await this._replaceRecordAt(localIndex, mergedRecord, {
+        this._replaceRecordAt(localIndex, mergedRecord, {
           keepSyncMetadata: true,
         });
       } else {
@@ -821,7 +810,7 @@ class AutofillRecords {
         // with the merged record.
         let forkedLocalRecord = this._forkLocalRecord(localRecord);
         forkedGUID = forkedLocalRecord.guid;
-        await this._replaceRecordAt(localIndex, remoteRecord, {
+        this._replaceRecordAt(localIndex, remoteRecord, {
           keepSyncMetadata: false,
         });
       }
@@ -1044,9 +1033,7 @@ class AutofillRecords {
       }
 
       profile = this._clone(profile);
-      if (this.decryptCCNumberFields) {
-        await this.decryptCCNumberFields(profile);
-      }
+      this._toRawData(profile);
 
       let keys = new Set(Object.keys(record));
       for (let key of Object.keys(profile)) {
@@ -1057,9 +1044,6 @@ class AutofillRecords {
       // local record, and we'll update them in `reconcile`. Computed fields
       // aren't synced at all.
       for (let field of INTERNAL_FIELDS) {
-        keys.delete(field);
-      }
-      for (let field of this.VALID_COMPUTED_FIELDS) {
         keys.delete(field);
       }
       if (!keys.size) {
@@ -1160,6 +1144,10 @@ class AutofillRecords {
 
   _stripComputedFields(record) {
     this.VALID_COMPUTED_FIELDS.forEach(field => delete record[field]);
+  }
+
+  _toRawData(record) {
+    this._stripComputedFields(record);
   }
 
   // An interface to be inherited.
@@ -1463,6 +1451,15 @@ class CreditCards extends AutofillRecords {
     super(store, "creditCards", VALID_CREDIT_CARD_FIELDS, VALID_CREDIT_CARD_COMPUTED_FIELDS, CREDIT_CARD_SCHEMA_VERSION);
   }
 
+  _toRawData(creditCard) {
+    super._toRawData(creditCard);
+
+    if (MasterPassword.isLoggedIn) {
+      creditCard["cc-number"] = MasterPassword.decryptSync(creditCard["cc-number-encrypted"]);
+      delete creditCard["cc-number-encrypted"];
+    }
+  }
+
   _computeFields(creditCard) {
     // NOTE: Remember to bump the schema version number if any of the existing
     //       computing algorithm changes. (No need to bump when just adding new
@@ -1492,7 +1489,14 @@ class CreditCards extends AutofillRecords {
   _normalizeFields(creditCard) {
     // Check if cc-number is encrypted (encryptCCNumberFields should be called first).
     if (!creditCard["cc-number-encrypted"] || !creditCard["cc-number"].includes("*")) {
-      throw new Error("Credit card number needs to be normalized first.");
+      if (MasterPassword.isLoggedIn) {
+        // TODO
+        let ccNumber = creditCard["cc-number"];
+        creditCard["cc-number-encrypted"] = MasterPassword.encryptSync(ccNumber);
+        creditCard["cc-number"] = this._getMaskedCCNumber(ccNumber);
+      } else {
+        throw new Error("Credit card number needs to be encrypted first.");
+      }
     }
 
     // Normalize name

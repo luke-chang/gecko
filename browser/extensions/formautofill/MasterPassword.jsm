@@ -35,6 +35,10 @@ this.MasterPassword = {
     return this._token.hasPassword;
   },
 
+  get isLoggedIn() {
+    return Services.logins.isLoggedIn;
+  },
+
   /**
    * Display the master password login prompt no matter it's logged in or not.
    * If an existing MP prompt is already open, the result from it will be used instead.
@@ -95,6 +99,10 @@ this.MasterPassword = {
     return cryptoSDR.decrypt(cipherText);
   },
 
+  decryptSync(cipherText) {
+    return cryptoSDR.decrypt(cipherText);
+  },
+
   /**
    * Encrypts a string and returns cipher text containing algorithm information used for decryption.
    *
@@ -109,6 +117,10 @@ this.MasterPassword = {
     return cryptoSDR.encrypt(plainText);
   },
 
+  encryptSync(plainText) {
+    return cryptoSDR.encrypt(plainText);
+  },
+
   /**
    * Resolve when master password dialogs are closed, immediately if none are open.
    *
@@ -120,8 +132,8 @@ this.MasterPassword = {
   async waitForExistingDialog() {
     if (!Services.logins.uiBusy) {
       log.debug("waitForExistingDialog: Dialog isn't showing. isLoggedIn:",
-                Services.logins.isLoggedIn);
-      return Services.logins.isLoggedIn;
+                this.isLoggedIn);
+      return this.isLoggedIn;
     }
 
     return new Promise((resolve) => {
