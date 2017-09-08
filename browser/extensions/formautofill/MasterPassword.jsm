@@ -35,6 +35,10 @@ this.MasterPassword = {
     return this._token.hasPassword;
   },
 
+  get isUIBusy() {
+    return Services.logins.uiBusy;
+  },
+
   /**
    * Display the master password login prompt no matter it's logged in or not.
    * If an existing MP prompt is already open, the result from it will be used instead.
@@ -48,7 +52,7 @@ this.MasterPassword = {
     }
 
     // If a prompt is already showing then wait for and focus it.
-    if (Services.logins.uiBusy) {
+    if (this.isUIBusy) {
       return this.waitForExistingDialog();
     }
 
@@ -81,17 +85,36 @@ this.MasterPassword = {
    * @returns {Promise<string>} resolves to the decrypted string, or rejects otherwise.
    */
   async decrypt(cipherText, reauth = false) {
-    let loggedIn = false;
+    let dialogPassed = true;
     if (reauth) {
-      loggedIn = await this.prompt();
-    } else {
-      loggedIn = await this.waitForExistingDialog();
+      dialogPassed = await this.prompt();
+    } else if (this.isUIBusy) {
+      dialogPassed = await this.waitForExistingDialog();
     }
 
-    if (!loggedIn) {
+    if (!dialogPassed) {
       throw Components.Exception("User canceled master password entry", Cr.NS_ERROR_ABORT);
     }
 
+    return cryptoSDR.decrypt(cipherText);
+  },
+
+  /**
+   * Decrypts cipherText synchronously. "waitForExistingDialog" needs to be
+   * called outside in case another dialog is showing.
+   *
+   * NOTE: This method will be removed soon once the ProfileStorage APIs are
+   *       refactored to be async functions (bug 1399367). Please use async
+   *       version instead.
+   *
+   * @deprecated
+   * @param   {string} cipherText Encrypted string including the algorithm details.
+   * @returns {string} The decrypted string.
+   */
+  decryptSync(cipherText) {
+    if (this.isUIBusy) {
+      throw Components.Exception("\"waitForExistingDialog\" should be called first", Cr.NS_ERROR_UNEXPECTED);
+    }
     return cryptoSDR.decrypt(cipherText);
   },
 
@@ -102,10 +125,29 @@ this.MasterPassword = {
    * @returns {Promise<string>} resolves to the encrypted string (with algorithm), otherwise rejects.
    */
   async encrypt(plainText) {
-    if (Services.logins.uiBusy && !await this.waitForExistingDialog()) {
+    if (this.isUIBusy && !await this.waitForExistingDialog()) {
       throw Components.Exception("User canceled master password entry", Cr.NS_ERROR_ABORT);
     }
 
+    return cryptoSDR.encrypt(plainText);
+  },
+
+  /**
+   * Encrypts plainText synchronously. "waitForExistingDialog" needs to be
+   * called outside in case another dialog is showing.
+   *
+   * NOTE: This method will be removed soon once the ProfileStorage APIs are
+   *       refactored to be async functions (bug 1399367). Please use async
+   *       version instead.
+   *
+   * @deprecated
+   * @param   {string} plainText A plain string to be encrypted.
+   * @returns {string} The encrypted cipher string.
+   */
+  encryptSync(plainText) {
+    if (this.isUIBusy) {
+      throw Components.Exception("\"waitForExistingDialog\" should be called first", Cr.NS_ERROR_UNEXPECTED);
+    }
     return cryptoSDR.encrypt(plainText);
   },
 
@@ -118,7 +160,7 @@ this.MasterPassword = {
    *          Resolves with whether the user is logged in to MP.
    */
   async waitForExistingDialog() {
-    if (!Services.logins.uiBusy) {
+    if (!this.isUIBusy) {
       log.debug("waitForExistingDialog: Dialog isn't showing. isLoggedIn:",
                 Services.logins.isLoggedIn);
       return Services.logins.isLoggedIn;

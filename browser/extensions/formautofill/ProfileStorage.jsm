@@ -58,8 +58,7 @@
  *
  *       // credit card fields
  *       cc-name,
- *       cc-number,            // e.g. ************1234
- *       cc-number-encrypted,
+ *       cc-number,            // will be stored in masked format (************1234)
  *       cc-exp-month,
  *       cc-exp-year,          // 2-digit year will be converted to 4 digits
  *                             // upon saving
@@ -69,6 +68,7 @@
  *       cc-given-name,
  *       cc-additional-name,
  *       cc-family-name,
+ *       cc-number-encrypted,  // encrypted from the original unmasked "cc-number"
  *       cc-exp,
  *
  *       // metadata
@@ -182,7 +182,6 @@ const VALID_ADDRESS_COMPUTED_FIELDS = [
 const VALID_CREDIT_CARD_FIELDS = [
   "cc-name",
   "cc-number",
-  "cc-number-encrypted",
   "cc-exp-month",
   "cc-exp-year",
 ];
@@ -191,6 +190,7 @@ const VALID_CREDIT_CARD_COMPUTED_FIELDS = [
   "cc-given-name",
   "cc-additional-name",
   "cc-family-name",
+  "cc-number-encrypted",
   "cc-exp",
 ];
 
@@ -384,6 +384,7 @@ class AutofillRecords {
     if (!recordFound) {
       throw new Error("No matching record.");
     }
+    this._stripComputedFields(recordFound);
 
     // Clone the record by Object assign API to preserve the property with empty string.
     let recordToUpdate = Object.assign({}, record);
@@ -413,7 +414,6 @@ class AutofillRecords {
       syncMetadata.changeCounter += 1;
     }
 
-    this._stripComputedFields(recordFound);
     this._computeFields(recordFound);
 
     this._store.saveSoon();
@@ -508,7 +508,7 @@ class AutofillRecords {
     }
 
     // The record is cloned to avoid accidental modifications from outside.
-    let clonedRecord = this._clone(recordFound);
+    let clonedRecord = this._cloneAndCleanUp(recordFound);
     if (rawData) {
       this._stripComputedFields(clonedRecord);
     } else {
@@ -532,7 +532,7 @@ class AutofillRecords {
 
     let records = this._store.data[this._collectionName].filter(r => !r.deleted || includeDeleted);
     // Records are cloned to avoid accidental modifications from outside.
-    let clonedRecords = records.map(r => this._clone(r));
+    let clonedRecords = records.map(r => this._cloneAndCleanUp(r));
     clonedRecords.forEach(record => {
       if (rawData) {
         this._stripComputedFields(record);
@@ -605,6 +605,9 @@ class AutofillRecords {
    *          records can't be merged.
    */
   _mergeSyncedRecords(localRecord, remoteRecord) {
+    localRecord = this._clone(localRecord);
+    this._stripComputedFields(localRecord);
+
     let sync = this._getSyncMetaData(localRecord, true);
 
     // Copy all internal fields from the remote record. We'll update their
@@ -727,7 +730,7 @@ class AutofillRecords {
    *          A clone of the local record with a new GUID.
    */
   _forkLocalRecord(localRecord) {
-    let forkedLocalRecord = this._clone(localRecord);
+    let forkedLocalRecord = this._cloneAndCleanUp(localRecord);
 
     this._stripComputedFields(forkedLocalRecord);
 
@@ -986,47 +989,48 @@ class AutofillRecords {
    * fields that match incoming remote records. This avoids creating
    * duplicate profiles with the same information.
    *
-   * @param   {Object} record
+   * @param   {Object} remoteRecord
    *          The remote record.
    * @returns {string|null}
    *          The GUID of the matching local record, or `null` if no records
    *          match.
    */
-  findDuplicateGUID(record) {
-    if (!record.guid) {
+  findDuplicateGUID(remoteRecord) {
+    if (!remoteRecord.guid) {
       throw new Error("Record missing GUID");
     }
-    this._ensureMatchingVersion(record);
-    if (record.deleted) {
+    this._ensureMatchingVersion(remoteRecord);
+    if (remoteRecord.deleted) {
       // Tombstones don't carry enough info to de-dupe, and we should have
       // handled them separately when applying the record.
       throw new Error("Tombstones can't have duplicates");
     }
-    let records = this._store.data[this._collectionName];
-    for (let profile of records) {
-      if (profile.deleted) {
+    let localRecords = this._store.data[this._collectionName];
+    for (let localRecord of localRecords) {
+      if (localRecord.deleted) {
         continue;
       }
-      if (profile.guid == record.guid) {
-        throw new Error(`Record ${record.guid} already exists`);
+      if (localRecord.guid == remoteRecord.guid) {
+        throw new Error(`Record ${remoteRecord.guid} already exists`);
       }
-      if (this._getSyncMetaData(profile)) {
-        // This record has already been uploaded, so it can't be a dupe of
+      if (this._getSyncMetaData(localRecord)) {
+        // This local record has already been uploaded, so it can't be a dupe of
         // another incoming item.
         continue;
       }
-      let keys = new Set(Object.keys(record));
-      for (let key of Object.keys(profile)) {
+
+      // Ignore computed fields when matching records as they aren't synced at all.
+      let strippedLocalRecord = this._clone(localRecord);
+      this._stripComputedFields(strippedLocalRecord);
+
+      let keys = new Set(Object.keys(remoteRecord));
+      for (let key of Object.keys(strippedLocalRecord)) {
         keys.add(key);
       }
-      // Ignore internal and computed fields when matching records. Internal
-      // fields are synced, but almost certainly have different values than the
-      // local record, and we'll update them in `reconcile`. Computed fields
-      // aren't synced at all.
+      // Ignore internal fields when matching records. Internal fields are synced,
+      // but almost certainly have different values than the local record, and
+      // we'll update them in `reconcile`.
       for (let field of INTERNAL_FIELDS) {
-        keys.delete(field);
-      }
-      for (let field of this.VALID_COMPUTED_FIELDS) {
         keys.delete(field);
       }
       if (!keys.size) {
@@ -1040,13 +1044,13 @@ class AutofillRecords {
         // For now, we ensure that both (or neither) records have the field
         // with matching values. This doesn't account for the version yet
         // (bug 1377204).
-        same = key in profile == key in record && profile[key] == record[key];
+        same = key in strippedLocalRecord == key in remoteRecord && strippedLocalRecord[key] == remoteRecord[key];
         if (!same) {
           break;
         }
       }
       if (same) {
-        return profile.guid;
+        return strippedLocalRecord.guid;
       }
     }
     return null;
@@ -1057,6 +1061,10 @@ class AutofillRecords {
    */
 
   _clone(record) {
+    return Object.assign({}, record);
+  }
+
+  _cloneAndCleanUp(record) {
     let result = {};
     for (let key in record) {
       // Do not expose hidden fields and fields with empty value (mainly used
@@ -1426,6 +1434,13 @@ class CreditCards extends AutofillRecords {
     super(store, "creditCards", VALID_CREDIT_CARD_FIELDS, VALID_CREDIT_CARD_COMPUTED_FIELDS, CREDIT_CARD_SCHEMA_VERSION);
   }
 
+  _getMaskedCCNumber(ccNumber) {
+    if (ccNumber.length <= 4) {
+      throw new Error(`Invalid credit card number`);
+    }
+    return "*".repeat(ccNumber.length - 4) + ccNumber.substr(-4);
+  }
+
   _computeFields(creditCard) {
     // NOTE: Remember to bump the schema version number if any of the existing
     //       computing algorithm changes. (No need to bump when just adding new
@@ -1449,15 +1464,31 @@ class CreditCards extends AutofillRecords {
       hasNewComputedFields = true;
     }
 
+    // Encrypt credit card number
+    if (!("cc-number-encrypted" in creditCard)) {
+      let ccNumber = (creditCard["cc-number"] || "").replace(/\s/g, "");
+      if (FormAutofillUtils.isCCNumber(ccNumber)) {
+        creditCard["cc-number"] = this._getMaskedCCNumber(ccNumber);
+        creditCard["cc-number-encrypted"] = MasterPassword.encryptSync(ccNumber);
+      } else {
+        delete creditCard["cc-number"];
+        // Computed fields are always present in the storage no matter it's
+        // empty or not.
+        creditCard["cc-number-encrypted"] = "";
+      }
+    }
+
     return hasNewComputedFields;
   }
 
-  _normalizeFields(creditCard) {
-    // Check if cc-number is normalized(normalizeCCNumberFields should be called first).
-    if (!creditCard["cc-number-encrypted"] || !creditCard["cc-number"].includes("*")) {
-      throw new Error("Credit card number needs to be normalized first.");
+  _stripComputedFields(creditCard) {
+    if (creditCard["cc-number-encrypted"]) {
+      creditCard["cc-number"] = MasterPassword.decryptSync(creditCard["cc-number-encrypted"]);
     }
+    super._stripComputedFields(creditCard);
+  }
 
+  _normalizeFields(creditCard) {
     // Normalize name
     if (creditCard["cc-given-name"] || creditCard["cc-additional-name"] || creditCard["cc-family-name"]) {
       if (!creditCard["cc-name"]) {
@@ -1492,31 +1523,6 @@ class CreditCards extends AutofillRecords {
       } else {
         creditCard["cc-exp-year"] = expYear;
       }
-    }
-  }
-
-  /**
-   * Normalize credit card number related field for saving. It should always be
-   * called before adding/updating credit card records.
-   *
-   * @param  {Object} creditCard
-   *         The creditCard record with plaintext number only.
-   */
-  async normalizeCCNumberFields(creditCard) {
-    // Fields that should not be set by content.
-    delete creditCard["cc-number-encrypted"];
-
-    // Validate and encrypt credit card numbers, and calculate the masked numbers
-    if (creditCard["cc-number"]) {
-      let ccNumber = creditCard["cc-number"].replace(/\s/g, "");
-      delete creditCard["cc-number"];
-
-      if (!FormAutofillUtils.isCCNumber(ccNumber)) {
-        throw new Error("Credit card number contains invalid characters or is under 12 digits.");
-      }
-
-      creditCard["cc-number-encrypted"] = await MasterPassword.encrypt(ccNumber);
-      creditCard["cc-number"] = "*".repeat(ccNumber.length - 4) + ccNumber.substr(-4);
     }
   }
 }

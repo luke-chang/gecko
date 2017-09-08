@@ -203,7 +203,12 @@ FormAutofillParent.prototype = {
         break;
       }
       case "FormAutofill:SaveCreditCard": {
-        await this.profileStorage.creditCards.normalizeCCNumberFields(data.creditcard);
+        // TODO: "MasterPassword.waitForExistingDialog()" can be removed after
+        //       the storage APIs are refactored to be async functions (bug 1399367).
+        if (MasterPassword.isUIBusy && !await MasterPassword.waitForExistingDialog()) {
+          log.debug("User canceled master password entry.");
+          return;
+        }
         this.profileStorage.creditCards.add(data.creditcard);
         break;
       }
@@ -454,7 +459,13 @@ FormAutofillParent.prototype = {
       return;
     }
 
-    await this.profileStorage.creditCards.normalizeCCNumberFields(creditCard.record);
+    // TODO: "MasterPassword.waitForExistingDialog()" can be removed after the
+    //       storage APIs are refactored to be async functions (bug 1399367).
+    if (MasterPassword.isUIBusy && !await MasterPassword.waitForExistingDialog()) {
+      log.debug("User canceled master password entry.");
+      return;
+    }
+
     this.profileStorage.creditCards.add(creditCard.record);
   },
 
