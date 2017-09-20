@@ -282,7 +282,7 @@ class AutofillRecords {
    * @returns {string}
    *          The GUID of the newly added item..
    */
-  add(record, {sourceSync = false} = {}) {
+  async add(record, {sourceSync = false} = {}) {
     this.log.debug("add:", record);
 
     if (sourceSync) {
@@ -300,11 +300,11 @@ class AutofillRecords {
         }
       }
       let recordToSave = this._clone(record);
-      return this._saveRecord(recordToSave, {sourceSync});
+      return await this._saveRecord(recordToSave, {sourceSync});
     }
 
     if (record.deleted) {
-      return this._saveRecord(record);
+      return await this._saveRecord(record);
     }
 
     let recordToSave = this._clone(record);
@@ -320,10 +320,10 @@ class AutofillRecords {
     recordToSave.timeLastUsed = 0;
     recordToSave.timesUsed = 0;
 
-    return this._saveRecord(recordToSave);
+    return await this._saveRecord(recordToSave);
   }
 
-  _saveRecord(record, {sourceSync = false} = {}) {
+  async _saveRecord(record, {sourceSync = false} = {}) {
     if (!record.guid) {
       throw new Error("Record missing GUID");
     }
@@ -348,7 +348,7 @@ class AutofillRecords {
       sync.changeCounter = 0;
     }
 
-    this._computeFields(recordToSave);
+    await this._computeFields(recordToSave);
 
     this._store.data[this._collectionName].push(recordToSave);
 
@@ -377,14 +377,14 @@ class AutofillRecords {
    * @param  {boolean} [preserveOldProperties = false]
    *         Preserve old record's properties if they don't exist in new record.
    */
-  update(guid, record, preserveOldProperties = false) {
+  async update(guid, record, preserveOldProperties = false) {
     this.log.debug("update:", guid, record);
 
     let recordFound = this._findByGUID(guid);
     if (!recordFound) {
       throw new Error("No matching record.");
     }
-    this._stripComputedFields(recordFound);
+    await this._stripComputedFields(recordFound);
 
     // Clone the record by Object assign API to preserve the property with empty string.
     let recordToUpdate = Object.assign({}, record);
@@ -414,7 +414,7 @@ class AutofillRecords {
       syncMetadata.changeCounter += 1;
     }
 
-    this._computeFields(recordFound);
+    await this._computeFields(recordFound);
 
     this._store.saveSoon();
     Services.obs.notifyObservers(null, "formautofill-storage-changed", "update");
@@ -499,7 +499,7 @@ class AutofillRecords {
    * @returns {Object}
    *          A clone of the record.
    */
-  get(guid, {rawData = false} = {}) {
+  async get(guid, {rawData = false} = {}) {
     this.log.debug("get:", guid, rawData);
 
     let recordFound = this._findByGUID(guid);
@@ -510,7 +510,7 @@ class AutofillRecords {
     // The record is cloned to avoid accidental modifications from outside.
     let clonedRecord = this._cloneAndCleanUp(recordFound);
     if (rawData) {
-      this._stripComputedFields(clonedRecord);
+      await this._stripComputedFields(clonedRecord);
     } else {
       this._recordReadProcessor(clonedRecord);
     }
@@ -527,19 +527,19 @@ class AutofillRecords {
    * @returns {Array.<Object>}
    *          An array containing clones of all records.
    */
-  getAll({rawData = false, includeDeleted = false} = {}) {
+  async getAll({rawData = false, includeDeleted = false} = {}) {
     this.log.debug("getAll", rawData, includeDeleted);
 
     let records = this._store.data[this._collectionName].filter(r => !r.deleted || includeDeleted);
     // Records are cloned to avoid accidental modifications from outside.
     let clonedRecords = records.map(r => this._cloneAndCleanUp(r));
-    clonedRecords.forEach(record => {
+    for (record of clonedRecords) {
       if (rawData) {
-        this._stripComputedFields(record);
+        await this._stripComputedFields(record);
       } else {
         this._recordReadProcessor(record);
       }
-    });
+    }
     return clonedRecords;
   }
 
@@ -604,9 +604,9 @@ class AutofillRecords {
    *          The merged record, or `null` if there are conflicts and the
    *          records can't be merged.
    */
-  _mergeSyncedRecords(localRecord, remoteRecord) {
+  async _mergeSyncedRecords(localRecord, remoteRecord) {
     localRecord = this._clone(localRecord);
-    this._stripComputedFields(localRecord);
+    await this._stripComputedFields(localRecord);
 
     let sync = this._getSyncMetaData(localRecord, true);
 
@@ -679,11 +679,11 @@ class AutofillRecords {
    *          the sync is interrupted after the record is merged, but before
    *          it's uploaded.
    */
-  _replaceRecordAt(index, remoteRecord, {keepSyncMetadata = false} = {}) {
+  async _replaceRecordAt(index, remoteRecord, {keepSyncMetadata = false} = {}) {
     let localRecord = this._store.data[this._collectionName][index];
     let newRecord = this._clone(remoteRecord);
 
-    this._stripComputedFields(newRecord);
+    await this._stripComputedFields(newRecord);
 
     this._store.data[this._collectionName][index] = newRecord;
 
@@ -717,7 +717,7 @@ class AutofillRecords {
       }
     }
 
-    this._computeFields(newRecord);
+    await this._computeFields(newRecord);
   }
 
   /**
@@ -729,10 +729,10 @@ class AutofillRecords {
    * @returns {string}
    *          A clone of the local record with a new GUID.
    */
-  _forkLocalRecord(localRecord) {
+  async _forkLocalRecord(localRecord) {
     let forkedLocalRecord = this._cloneAndCleanUp(localRecord);
 
-    this._stripComputedFields(forkedLocalRecord);
+    await this._stripComputedFields(forkedLocalRecord);
 
     forkedLocalRecord.guid = this._generateGUID();
     this._store.data[this._collectionName].push(forkedLocalRecord);
@@ -743,7 +743,7 @@ class AutofillRecords {
     // uploaded.
     this._getSyncMetaData(forkedLocalRecord, true);
 
-    this._computeFields(forkedLocalRecord);
+    await this._computeFields(forkedLocalRecord);
 
     return forkedLocalRecord;
   }
@@ -763,7 +763,7 @@ class AutofillRecords {
    *          existing locally modified record if the conflicts could not be
    *          resolved.
    */
-  reconcile(remoteRecord) {
+  async reconcile(remoteRecord) {
     this._ensureMatchingVersion(remoteRecord);
     if (remoteRecord.deleted) {
       throw new Error(`Can't reconcile tombstone ${remoteRecord.guid}`);
@@ -781,23 +781,23 @@ class AutofillRecords {
 
     if (sync.changeCounter === 0) {
       // Local not modified. Replace local with remote.
-      this._replaceRecordAt(localIndex, remoteRecord, {
+      await this._replaceRecordAt(localIndex, remoteRecord, {
         keepSyncMetadata: false,
       });
     } else {
-      let mergedRecord = this._mergeSyncedRecords(localRecord, remoteRecord);
+      let mergedRecord = await this._mergeSyncedRecords(localRecord, remoteRecord);
       if (mergedRecord) {
         // Local and remote modified, but we were able to merge. Replace the
         // local record with the merged record.
-        this._replaceRecordAt(localIndex, mergedRecord, {
+        await this._replaceRecordAt(localIndex, mergedRecord, {
           keepSyncMetadata: true,
         });
       } else {
         // Merge conflict. Fork the local record, then replace the original
         // with the merged record.
-        let forkedLocalRecord = this._forkLocalRecord(localRecord);
+        let forkedLocalRecord = await this._forkLocalRecord(localRecord);
         forkedGUID = forkedLocalRecord.guid;
-        this._replaceRecordAt(localIndex, remoteRecord, {
+        await this._replaceRecordAt(localIndex, remoteRecord, {
           keepSyncMetadata: false,
         });
       }
@@ -995,7 +995,7 @@ class AutofillRecords {
    *          The GUID of the matching local record, or `null` if no records
    *          match.
    */
-  findDuplicateGUID(remoteRecord) {
+  async findDuplicateGUID(remoteRecord) {
     if (!remoteRecord.guid) {
       throw new Error("Record missing GUID");
     }
@@ -1021,7 +1021,7 @@ class AutofillRecords {
 
       // Ignore computed fields when matching records as they aren't synced at all.
       let strippedLocalRecord = this._clone(localRecord);
-      this._stripComputedFields(strippedLocalRecord);
+      await this._stripComputedFields(strippedLocalRecord);
 
       let keys = new Set(Object.keys(remoteRecord));
       for (let key of Object.keys(strippedLocalRecord)) {
@@ -1087,7 +1087,7 @@ class AutofillRecords {
     });
   }
 
-  _migrateRecord(record) {
+  async _migrateRecord(record) {
     let hasChanges = false;
 
     if (!record.version || isNaN(record.version) || record.version < 1) {
@@ -1102,10 +1102,10 @@ class AutofillRecords {
       record.version = this.version;
 
       // Force to recompute fields if we upgrade the schema.
-      this._stripComputedFields(record);
+      await this._stripComputedFields(record);
     }
 
-    hasChanges |= this._computeFields(record);
+    hasChanges |= await this._computeFields(record);
     return hasChanges;
   }
 
@@ -1129,7 +1129,7 @@ class AutofillRecords {
     // test-only, so there's no good reason to request a save!
   }
 
-  _stripComputedFields(record) {
+  async _stripComputedFields(record) {
     this.VALID_COMPUTED_FIELDS.forEach(field => delete record[field]);
   }
 
@@ -1137,16 +1137,16 @@ class AutofillRecords {
   _recordReadProcessor(record) {}
 
   // An interface to be inherited.
-  _computeFields(record) {}
+  async _computeFields(record) {}
 
   // An interface to be inherited.
   _normalizeFields(record) {}
 
   // An interface to be inherited.
-  mergeIfPossible(guid, record) {}
+  async mergeIfPossible(guid, record) {}
 
   // An interface to be inherited.
-  mergeToStorage(targetRecord) {}
+  async mergeToStorage(targetRecord) {}
 }
 
 class Addresses extends AutofillRecords {
@@ -1163,7 +1163,7 @@ class Addresses extends AutofillRecords {
     }
   }
 
-  _computeFields(address) {
+  async _computeFields(address) {
     // NOTE: Remember to bump the schema version number if any of the existing
     //       computing algorithm changes. (No need to bump when just adding new
     //       computed fields)
@@ -1340,7 +1340,7 @@ class Addresses extends AutofillRecords {
    * @returns {boolean}
    *          Return true if address is merged into target with specific guid or false if not.
    */
-  mergeIfPossible(guid, address) {
+  async mergeIfPossible(guid, address) {
     this.log.debug("mergeIfPossible:", guid, address);
 
     let addressFound = this._findByGUID(guid);
@@ -1399,8 +1399,8 @@ class Addresses extends AutofillRecords {
 
     addressFound.timeLastModified = Date.now();
 
-    this._stripComputedFields(addressFound);
-    this._computeFields(addressFound);
+    await this._stripComputedFields(addressFound);
+    await this._computeFields(addressFound);
 
     this._store.saveSoon();
     let str = Cc["@mozilla.org/supports-string;1"]
@@ -1417,10 +1417,10 @@ class Addresses extends AutofillRecords {
    * @returns {Array.<string>}
    *          Return an array of the merged GUID string.
    */
-  mergeToStorage(targetAddress) {
+  async mergeToStorage(targetAddress) {
     let mergedGUIDs = [];
     for (let address of this._store.data[this._collectionName]) {
-      if (!address.deleted && this.mergeIfPossible(address.guid, targetAddress)) {
+      if (!address.deleted && await this.mergeIfPossible(address.guid, targetAddress)) {
         mergedGUIDs.push(address.guid);
       }
     }
@@ -1441,7 +1441,7 @@ class CreditCards extends AutofillRecords {
     return "*".repeat(ccNumber.length - 4) + ccNumber.substr(-4);
   }
 
-  _computeFields(creditCard) {
+  async _computeFields(creditCard) {
     // NOTE: Remember to bump the schema version number if any of the existing
     //       computing algorithm changes. (No need to bump when just adding new
     //       computed fields)
@@ -1481,11 +1481,11 @@ class CreditCards extends AutofillRecords {
     return hasNewComputedFields;
   }
 
-  _stripComputedFields(creditCard) {
+  async _stripComputedFields(creditCard) {
     if (creditCard["cc-number-encrypted"]) {
       creditCard["cc-number"] = MasterPassword.decryptSync(creditCard["cc-number-encrypted"]);
     }
-    super._stripComputedFields(creditCard);
+    await super._stripComputedFields(creditCard);
   }
 
   _normalizeFields(creditCard) {
